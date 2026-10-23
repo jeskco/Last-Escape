@@ -1,0 +1,42 @@
+UNION CITY - WEB VERSION
+========================
+Everything needed is in this folder. It must be served from a web address
+(iPhone/Safari cannot run it by opening the files directly from the Files app).
+
+Put ALL files in the same folder level (do not use sub-folders):
+  index.html, game.swf, weapons.png, map.jpg, ruffle.js, the two .wasm files, manifest.webmanifest, 3 png icons
+
+OPTION A - computer: Netlify Drop
+  1. Go to app.netlify.com/drop and drag this whole folder onto the page.
+  2. Sign in (free) so the site does not expire. You get a web address.
+OPTION B - iPhone only: GitHub Pages
+  1. In Safari on github.com make a free account, then New repository
+     (name it something non-obvious).
+  2. Add file > Upload files, select ALL files in this folder at once, Commit.
+     (Largest file is 21 MB; GitHub's web upload limit is 25 MB per file.)
+  3. Settings > Pages > Deploy from a branch > main / (root) > Save.
+  4. After a minute your address is  https://YOURNAME.github.io/REPONAME/
+THEN, ON THE IPHONE
+  Open the address in Safari > Share > Add to Home Screen. It opens fullscreen
+  like an app. First load downloads about 50 MB, so use Wi-Fi.
+
+CONTROLS
+  Left side: drag anywhere = move (floating stick; push up to jump, down to crouch).
+  Right side: drag anywhere = aim (floating stick). TAP = snap aim to that spot.
+  TAP YOURSELF (the ring around your character) = loot / interact. TAP AN OBJECT = loot it.
+  Jump / crouch / run: use the left stick (up = jump, down = crouch).
+  Round radar (top-left): map of the city, you = the arrow (turns with your aim); tap it to open the big map.
+  Weapon card (top-right): picture of the gun in your hands; tap it to swap guns. Flashlight + CAL buttons sit under it.
+  Bottom tab menu (backpack / character / journal): tap the game's own tabs at the bottom.
+  PRESS AND HOLD on the right side = aim at that spot and keep firing.
+  GRABBED BY A ZOMBIE: hold the pink BREAK button (mashes left/right for you) until you are free.
+  Looting: stand so the container's highlight box appears, then tap yourself, double-tap, or press LOOT.
+  Big FIRE buttons (right and left) also shoot. AUTO still aims at the nearest enemy.
+  If tap-aim points the wrong way, press CAL (top right) and tap your character once.
+  While a menu is open the controls hide and a BACK button appears top-left.
+
+IF COLORS LOOK WRONG: add  ?renderer=canvas  to the end of the address
+(or ?renderer=webgl) and reload.
+
+NOTE: this contains someone else's game. Anything you host is reachable by anyone
+who has the link. Keep it for your own use; do not share or advertise the link.

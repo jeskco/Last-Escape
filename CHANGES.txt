@@ -1,0 +1,13 @@
+CHANGES IN THIS VERSION (3_12, built on 3_11)
+
+  * AUTO-AIM IS NO LONGER IN THE WAY OF MOVING. The game turns your character to face whatever it is aiming at,
+    and walking away from the way you face is "backwards": slow, no sprinting, and with a heavy load it can be
+    zero. So when auto-aim grabbed an enemy and you pushed the other way, you could not move or sprint.
+    Now, while you are pushing the move stick, you face the way you are walking (full speed, sprint works).
+    Auto-aim only snaps to an enemy when you are standing still or holding FIRE.
+  * Only game.swf changed (index.html and everything else are identical to 3_11).
+
+NOT TESTED in the real game. The game script compiled and decompiled OK and every other part of game.swf is
+identical to 3_11.
+If holding FIRE while backing away feels wrong (you walk slowly because you keep facing the enemy), tell me
+and I can change that too.
