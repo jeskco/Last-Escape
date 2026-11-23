@@ -28,7 +28,14 @@ jobs:
           set -o pipefail
           xcodebuild -project RigViewer.xcodeproj -scheme RigViewer -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee build.log
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee build.log > /dev/null
+      - name: Report errors as annotations
+        if: failure()
+        run: |
+          grep -E "error:|fatal error|failed|Failed|xcodebuild: error" build.log | grep -v "^\s*$" | sed 's#.*/RigViewer/RigViewer/##' | sort -u | head -45 > errs.txt || true
+          if [ ! -s errs.txt ]; then tail -40 build.log > errs.txt; fi
+          n=0; while IFS= read -r l; do n=$((n+1)); g=$(( (n-1)/9 )); echo "$l" >> chunk_$g.txt; done < errs.txt
+          for f in chunk_*.txt; do echo "::error title=$(basename $f)::$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' $f)"; done
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
@@ -45,4 +52,4 @@ jobs:
           echo "run ${{ github.run_number }} ${{ job.status }} $(date -u)" > out/status.txt
           cd out && git init -q && git checkout -q -b rig-viewer-builds && git add -A
           git -c user.name="rig-viewer-ci" -c user.email="ci@users.noreply.github.com" commit -qm "Build ${{ github.run_number }}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" builds
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" rig-viewer-builds > push.log 2>&1 || { echo "::error title=push::$(sed ':a;N;$!ba;s/\n/%0A/g' push.log)"; exit 1; }
