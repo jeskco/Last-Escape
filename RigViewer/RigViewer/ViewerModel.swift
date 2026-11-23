@@ -342,7 +342,7 @@ final class ViewerModel: ObservableObject {
         clips.forEach { $0.players.forEach { $0.stop() } }
         currentClip = index
         for p in clips[index].players {
-            p.animation.repetitionCount = .greatestFiniteMagnitude
+            p.animation.repeatCount = .greatestFiniteMagnitude
             p.speed = CGFloat(speed)
             p.play()
             p.paused = !isPlaying

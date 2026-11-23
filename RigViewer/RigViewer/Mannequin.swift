@@ -37,7 +37,7 @@ enum Mannequin {
         func swing(_ n: SCNNode, _ key: String, _ values: [Float], _ dur: Double) -> SCNAnimationPlayer {
             let a = CAKeyframeAnimation(keyPath: key)
             a.values = values.map { NSNumber(value: $0) }; a.duration = dur; a.calculationMode = .cubic
-            let sa = SCNAnimation(caAnimation: a); sa.repetitionCount = .greatestFiniteMagnitude; sa.isRemovedOnCompletion = false
+            let sa = SCNAnimation(caAnimation: a); sa.repeatCount = .greatestFiniteMagnitude; sa.isRemovedOnCompletion = false
             let p = SCNAnimationPlayer(animation: sa); p.stop(); n.addAnimationPlayer(p, forKey: key + (n.name ?? "")); return p
         }
         let T = 1.1
