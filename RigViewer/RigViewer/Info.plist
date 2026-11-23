@@ -37,11 +37,18 @@
         <string>org.khronos.collada.digital-asset-exchange</string>
         <string>org.khronos.gltf.binary</string>
         <string>org.khronos.gltf</string>
+        <string>com.autodesk.fbx</string>
       </array>
     </dict>
   </array>
   <key>UTImportedTypeDeclarations</key>
   <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>com.autodesk.fbx</string>
+      <key>UTTypeDescription</key><string>Autodesk FBX</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string><string>public.3d-content</string></array>
+      <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>fbx</string><string>FBX</string></array></dict>
+    </dict>
     <dict>
       <key>UTTypeIdentifier</key><string>org.khronos.gltf.binary</string>
       <key>UTTypeDescription</key><string>glTF Binary Model</string>

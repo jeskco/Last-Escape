@@ -126,7 +126,7 @@ struct LibraryView: View {
     }
 
     private var formats: some View {
-        Section2(title: "Supported Formats", footer: "FBX isn’t supported by Apple’s 3D frameworks — export to USDZ or glTF from Blender or Reality Converter.") {
+        Section2(title: "Supported Formats", footer: "For FBX files with separate textures, select the FBX and its texture images together in Files.") {
             ForEach(Array(ModelFormats.display.enumerated()), id: \.offset) { i, f in
                 Row(f.1, value: f.0, showDivider: i < ModelFormats.display.count - 1)
             }
@@ -134,11 +134,12 @@ struct LibraryView: View {
     }
 
     private var about: some View {
-        Section2(title: "About", footer: "Rig Viewer 2.0 · Native SwiftUI + SceneKit. No web engine.") {
+        Section2(title: "About", footer: "Rig Viewer 2.1 · Native SwiftUI + SceneKit. No web engine.") {
             Row("Expressive Robot", value: "Tomás Laulhé (Quaternius), CC0 · face shapes Don McCurdy")
             Row("HDR environments", value: "Poly Haven, CC0")
             Row("Coloured STL", value: "three.js examples, MIT")
-            Row("glTF loader", value: "GLTFKit2 by Warren Moore, MIT", showDivider: false)
+            Row("glTF loader", value: "GLTFKit2 by Warren Moore, MIT")
+            Row("FBX loader", value: "ufbx by Samuli Raivio, MIT", showDivider: false)
         }
     }
 }

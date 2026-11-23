@@ -80,14 +80,16 @@ enum ModelFormats {
     static let sceneKitNative: Set<String> = ["usdz", "usd", "usda", "usdc", "dae", "scn", "abc"]
     static let modelIO: Set<String> = ["obj", "stl", "ply"]
     static let gltf: Set<String> = ["glb", "gltf"]
-    static var all: Set<String> { sceneKitNative.union(modelIO).union(gltf) }
+    static let fbx: Set<String> = ["fbx"]
+    static var all: Set<String> { sceneKitNative.union(modelIO).union(gltf).union(fbx) }
     static let display: [(String, String)] = [
-        (".usdz .usd .usda .usdc", "Universal Scene Description"), (".glb .gltf", "glTF"), (".obj", "Wavefront OBJ"),
+        (".fbx", "Autodesk FBX"), (".usdz .usd .usda .usdc", "Universal Scene Description"), (".glb .gltf", "glTF"), (".obj", "Wavefront OBJ"),
         (".stl", "STL"), (".ply", "Stanford PLY"), (".dae", "Collada"), (".abc", "Alembic"), (".scn", "SceneKit"),
     ]
     static func name(for ext: String) -> String {
         switch ext {
         case "glb", "gltf": return "glTF"
+        case "fbx": return "FBX"
         case "usdz": return "USDZ"
         case "usd", "usda", "usdc": return "USD"
         case "obj": return "Wavefront OBJ"
@@ -186,8 +188,8 @@ final class ViewerModel: ObservableObject {
         guard let main = models.first else {
             try? fm.removeItem(at: dir)
             let ext = urls.first?.pathExtension.lowercased() ?? ""
-            if ext == "fbx" { showToast("FBX isn’t supported by Apple’s 3D frameworks. Convert it to USDZ or glTF (Reality Converter or Blender can).") }
-            else { showToast("Rig Viewer opens USDZ, USD, glTF/GLB, OBJ, STL, PLY, Collada, Alembic and SceneKit files.") }
+            _ = ext
+            showToast("Rig Viewer opens FBX, USDZ, USD, glTF/GLB, OBJ, STL, PLY, Collada, Alembic and SceneKit files.")
             return
         }
         open(url: main, remember: dir)
@@ -208,6 +210,24 @@ final class ViewerModel: ObservableObject {
                         if let dir { self.saveRecent(dir: dir, main: url) }
                     } else if status == .error || error != nil {
                         self.fail("Couldn’t open “\(name)”. \(error?.localizedDescription ?? "")")
+                    }
+                }
+            }
+            return
+        }
+        if ModelFormats.fbx.contains(ext) {
+            DispatchQueue.global(qos: .userInitiated).async {
+                var err: NSString? = nil
+                let result = FBXImporter.load(url, error: &err)
+                let message = err as String?
+                Task { @MainActor in
+                    guard let result, !result.scene.rootNode.childNodes.isEmpty else { self.fail("Couldn’t open “\(name)”. \(message ?? "")"); return }
+                    let clips = result.clips.map { ClipInfo(name: $0.name, duration: $0.duration, players: $0.players) }
+                    self.install(scene: result.scene, gltfAnimations: [], extraClips: clips, url: url, format: "FBX", name: name, bytes: bytes)
+                    if let dir { self.saveRecent(dir: dir, main: url) }
+                    if !result.missingTextures.isEmpty {
+                        let list = result.missingTextures.prefix(3).joined(separator: ", ")
+                        self.showToast("Some textures weren’t found (\(list)\(result.missingTextures.count > 3 ? "…" : "")). Pick them together with the FBX to include them.")
                     }
                 }
             }
