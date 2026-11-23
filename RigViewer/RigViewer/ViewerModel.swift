@@ -236,6 +236,7 @@ final class ViewerModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             var scn: SCNScene? = nil
             if ModelFormats.sceneKitNative.contains(ext) { scn = try? SCNScene(url: url, options: [.checkConsistency: true, .convertToYUp: true]) }
+            if ext == "stl" { scn = STLLoader.load(url) }
             if scn == nil || scn!.rootNode.childNodes.isEmpty {
                 let asset = MDLAsset(url: url)
                 asset.loadTextures()
@@ -534,14 +535,38 @@ final class ViewerModel: ObservableObject {
     }
 
     /// A USDZ for AR Quick Look: the original file when it already is one, otherwise an export of the model.
+    /// Writes just the model (no studio floor, lights, camera or bone marker) to a USDZ for AR Quick Look,
+    /// scaled to a sensible real-world size when the file's units are far off.
     func usdzForAR() -> URL? {
         if let u = sourceURL, u.pathExtension.lowercased() == "usdz" { return u }
-        let s = SCNScene()
-        for n in topNodes { s.rootNode.addChildNode(n.clone()) }
-        let out = FileManager.default.temporaryDirectory.appendingPathComponent((stats.name as NSString).deletingPathExtension + ".usdz")
-        try? FileManager.default.removeItem(at: out)
-        return s.write(to: out, options: nil, delegate: nil, progressHandler: nil) ? out : nil
+        let savedShading = shading
+        if shading != .lit { shading = .lit }
+        let extras = [cameraNode, floorNode, sunNode] + (boneMarker.map { [$0] } ?? [])
+        let parents = extras.map { $0.parent }
+        extras.forEach { $0.removeFromParentNode() }
+        let bg = scene.background.contents; scene.background.contents = nil
+
+        let wrapper = SCNNode(); wrapper.name = "Model"
+        let maxDim = max(stats.size.x, stats.size.y, stats.size.z)
+        if maxDim > 4 || (maxDim > 0 && maxDim < 0.03) { wrapper.simdScale = SIMD3(repeating: 0.6 / maxDim) }
+        let b = modelBounds()
+        let models = topNodes
+        models.forEach { wrapper.addChildNode($0) }
+        wrapper.simdPosition = SIMD3(-b.center.x, -b.minY, -b.center.z) * wrapper.simdScale
+        scene.rootNode.addChildNode(wrapper)
+
+        let base = ((stats.name as NSString).deletingPathExtension as NSString).replacingOccurrences(of: "/", with: "-")
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("\(base)-\(Int(Date().timeIntervalSince1970)).usdz")
+        let ok = scene.write(to: out, options: nil, delegate: nil, progressHandler: nil)
+
+        models.forEach { scene.rootNode.addChildNode($0) }
+        wrapper.removeFromParentNode()
+        for (n, p) in zip(extras, parents) { (p ?? scene.rootNode).addChildNode(n) }
+        scene.background.contents = bg
+        if savedShading != .lit { shading = savedShading }
+        return ok ? out : nil
     }
+
 
     // MARK: - recents
 

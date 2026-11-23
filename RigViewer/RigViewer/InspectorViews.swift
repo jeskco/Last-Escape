@@ -175,8 +175,8 @@ struct BonesTab: View {
                         HStack {
                             Text(b.name).font(.headline).lineLimit(1)
                             Spacer()
-                            Button { model.selectedBone = nil } label: { Image(systemName: "xmark").font(.caption.weight(.bold)).frame(width: 28, height: 28) }
-                                .buttonStyle(.plain).glass(Circle(), interactive: true)
+                            Button { model.selectedBone = nil } label: { Image(systemName: "xmark").font(.caption.weight(.bold)).frame(width: 28, height: 28).background(Color.primary.opacity(0.08), in: Circle()) }
+                                .buttonStyle(.plain)
                         }
                         HStack(spacing: 8) {
                             Axis(label: "X", value: p.x, color: .red); Axis(label: "Y", value: p.y, color: .green); Axis(label: "Z", value: p.z, color: .blue)
@@ -290,13 +290,10 @@ struct ViewTab: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            GlassGroup(spacing: 8) {
-                HStack(spacing: 8) {
-                    ActionButton(icon: "arkit", title: "AR", action: onAR)
-                    ActionButton(icon: "camera.aperture", title: "Snapshot", action: onSnapshot)
-                    ActionButton(icon: "arrow.up.left.and.arrow.down.right", title: "Full Screen", action: onFullScreen)
-                    ActionButton(icon: "scope", title: "Recenter") { model.frame() }
-                }
+            HStack(spacing: 8) {
+                ActionButton(icon: "arkit", title: "View in AR", action: onAR)
+                ActionButton(icon: "camera.aperture", title: "Snapshot", action: onSnapshot)
+                ActionButton(icon: "scope", title: "Recenter") { model.frame() }
             }
             Section2(title: "Display") {
                 Row(label: "Skeleton") { Toggle("", isOn: $model.showSkeleton).labelsHidden() }
@@ -340,9 +337,10 @@ struct ActionButton: View {
                 Image(systemName: icon).font(.system(size: 20, weight: .semibold)).frame(height: 24)
                 Text(title).font(.caption2.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity).frame(height: 70).contentShape(RoundedRectangle(cornerRadius: 22))
+            .frame(maxWidth: .infinity).frame(height: 70).contentShape(RoundedRectangle(cornerRadius: 20))
+            .background(Color(uiColor: .secondarySystemBackground).opacity(0.62), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain).glass(RoundedRectangle(cornerRadius: 22, style: .continuous), interactive: true)
+        .buttonStyle(.plain)
     }
 }
 

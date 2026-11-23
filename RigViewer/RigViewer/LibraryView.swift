@@ -12,7 +12,6 @@ struct Sample: Identifiable {
 struct LibraryView: View {
     @ObservedObject var model: ViewerModel
     @Binding var isPresented: Bool
-    @State private var importing = false
 
     var body: some View {
         NavigationStack {
@@ -32,9 +31,6 @@ struct LibraryView: View {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { isPresented = false }.fontWeight(.semibold) }
             }
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { isPresented = false; model.importFiles(urls) }
-        }
     }
 
     private var hero: some View {
@@ -47,7 +43,7 @@ struct LibraryView: View {
                     Text("Skeletons, animations, blend shapes, materials and AR — native, on device.").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            Button { importing = true } label: {
+            Button { DocumentPicker.present { urls in isPresented = false; model.importFiles(urls) } } label: {
                 Label("Open from Files", systemImage: "folder").font(.headline).frame(maxWidth: .infinity).frame(height: 34)
             }
             .glassButton(prominent: true)
@@ -105,7 +101,7 @@ struct LibraryView: View {
                             .overlay(alignment: .topLeading) {
                                 HStack(spacing: 4) {
                                     ForEach(s.badges, id: \.self) { b in
-                                        Text(b).font(.caption2.weight(.semibold)).padding(.horizontal, 8).frame(height: 22).glass(Capsule())
+                                        Text(b).font(.caption2.weight(.semibold)).padding(.horizontal, 8).frame(height: 22).background(.ultraThinMaterial, in: Capsule())
                                     }
                                 }
                                 .padding(8)
@@ -116,7 +112,7 @@ struct LibraryView: View {
                             }
                             .padding(12)
                         }
-                        .glass(RoundedRectangle(cornerRadius: 26, style: .continuous), interactive: true)
+                        .background(Color(uiColor: .secondarySystemBackground).opacity(0.75))
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     }
                     .buttonStyle(.plain)

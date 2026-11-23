@@ -12,7 +12,6 @@ struct ContentView: View {
     @State private var showLibrary = true
     @State private var immersive = false
     @State private var showExit = false
-    @State private var importing = false
     @State private var tab: InspectorTab = .info
     @State private var detent: Detent = .peek
     @State private var drag: CGFloat = 0
@@ -20,6 +19,7 @@ struct ContentView: View {
     @AppStorage("accentIndex") private var accentIndex = 0
 
     private var accent: Color { Accent.all[min(max(accentIndex, 0), Accent.all.count - 1)].color }
+    private let headerHeight: CGFloat = 68
 
     var body: some View {
         GeometryReader { geo in
@@ -30,28 +30,26 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 if !immersive {
-                    VStack { topBar; Spacer() }
-                        .padding(.horizontal, 12).padding(.top, 2)
-                        .transition(.move(edge: .top).combined(with: .opacity))
                     if landscape {
-                        HStack(alignment: .bottom, spacing: 12) {
-                            VStack { Spacer(); transport }
-                            inspector(height: geo.size.height - 8, landscape: true).frame(width: 370)
+                        HStack(alignment: .top, spacing: 12) {
+                            topBar.frame(maxWidth: 520)
+                            Spacer(minLength: 0)
+                            dock(height: geo.size.height, landscape: true).frame(width: 380)
                         }
-                        .padding(.horizontal, 12).padding(.bottom, 4)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .transition(.opacity)
                     } else {
-                        VStack(spacing: 10) {
-                            Spacer()
-                            if detent != .large { transport.padding(.horizontal, 12).transition(.opacity.combined(with: .scale(scale: 0.95))) }
-                            inspector(height: height(for: detent, total: geo.size.height + geo.safeAreaInsets.bottom) - drag, landscape: false)
+                        VStack(spacing: 0) {
+                            topBar.padding(.horizontal, 14).padding(.top, 4)
+                            Spacer(minLength: 0)
+                            dock(height: dockHeight(total: geo.size.height) - drag, landscape: false)
+                                .padding(.horizontal, 10).padding(.bottom, 6)
                         }
-                        .ignoresSafeArea(edges: .bottom)
-                        .transition(.move(edge: .bottom))
+                        .transition(.opacity)
                     }
                 } else if showExit {
                     VStack {
-                        Button { withAnimation(.spring(duration: 0.5, bounce: 0.25)) { immersive = false; showExit = false } } label: {
+                        Button { withAnimation(.spring(duration: 0.5, bounce: 0.2)) { immersive = false; showExit = false } } label: {
                             Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left").font(.subheadline.weight(.semibold)).padding(.horizontal, 18).frame(height: 44)
                         }
                         .buttonStyle(.plain).glass(Capsule(), interactive: true)
@@ -64,7 +62,7 @@ struct ContentView: View {
                     VStack {
                         Text(t).font(.subheadline.weight(.medium)).multilineTextAlignment(.center).padding(.horizontal, 20).padding(.vertical, 13)
                             .glass(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .padding(.horizontal, 24).padding(.top, immersive ? 60 : 70)
+                            .padding(.horizontal, 24).padding(.top, immersive ? 56 : 66)
                         Spacer()
                     }
                     .transition(.move(edge: .top).combined(with: .opacity)).allowsHitTesting(false)
@@ -74,52 +72,48 @@ struct ContentView: View {
                         .padding(28).frame(minWidth: 200).glass(RoundedRectangle(cornerRadius: 30, style: .continuous))
                 }
             }
-            .animation(.spring(duration: 0.45, bounce: 0.18), value: immersive)
-            .animation(.spring(duration: 0.42, bounce: 0.12), value: detent)
+            .animation(.spring(duration: 0.45, bounce: 0.15), value: immersive)
+            .animation(.spring(duration: 0.4, bounce: 0.1), value: detent)
         }
         .tint(accent)
         .fullScreenCover(isPresented: $showLibrary) { LibraryView(model: model, isPresented: $showLibrary).tint(accent) }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { model.importFiles(urls) }
-        }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
         .onOpenURL { url in showLibrary = false; model.importFiles([url]) }
-        .onChange(of: tab) { _, _ in if detent == .peek { detent = .medium } }
     }
 
     private func singleTap() {
         guard immersive else { return }
-        withAnimation(.spring(duration: 0.45, bounce: 0.25)) { showExit = true }
+        withAnimation(.spring(duration: 0.45, bounce: 0.2)) { showExit = true }
         Task { try? await Task.sleep(nanoseconds: 3_000_000_000); withAnimation(.easeOut(duration: 0.3)) { showExit = false } }
     }
 
-    private func height(for d: Detent, total: CGFloat) -> CGFloat {
-        switch d { case .peek: return 104; case .medium: return total * 0.46; case .large: return total * 0.88 }
+    private func dockHeight(total: CGFloat) -> CGFloat {
+        switch detent { case .peek: return headerHeight; case .medium: return total * 0.5; case .large: return total * 0.86 }
     }
 
-    // MARK: top bar
+    private func enterFullScreen() {
+        withAnimation(.spring(duration: 0.5, bounce: 0.15)) { immersive = true }
+        model.showToast("Tap the model to show the exit button")
+    }
+
+    // MARK: top bar — three controls, one glass group
     private var topBar: some View {
         GlassGroup(spacing: 10) {
             HStack(spacing: 10) {
                 Button { showLibrary = true } label: {
-                    Image(systemName: "square.grid.2x2").font(.system(size: 18, weight: .semibold)).frame(width: 50, height: 50).contentShape(Circle())
+                    Image(systemName: "square.grid.2x2").font(.system(size: 17, weight: .semibold)).frame(width: 46, height: 46).contentShape(Circle())
                 }
                 .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Library")
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.stats.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(model.stats.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                    Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
                 }
-                .padding(.horizontal, 18).frame(height: 50).frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).frame(height: 46).frame(maxWidth: .infinity, alignment: .leading)
                 .glass(Capsule())
 
-                Button { withAnimation(.spring(duration: 0.5, bounce: 0.2)) { immersive = true }; model.showToast("Full screen · tap the model to show the exit button") } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).frame(width: 50, height: 50).contentShape(Circle())
-                }
-                .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Full screen")
-
-                Button { importing = true } label: {
-                    Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(.white).frame(width: 50, height: 50).contentShape(Circle())
+                Button { DocumentPicker.present { model.importFiles($0) } } label: {
+                    Image(systemName: "plus").font(.system(size: 19, weight: .bold)).foregroundStyle(.white).frame(width: 46, height: 46).contentShape(Circle())
                 }
                 .buttonStyle(.plain).glass(Circle(), tint: accent, interactive: true).accessibilityLabel("Open file")
             }
@@ -127,84 +121,104 @@ struct ContentView: View {
     }
 
     private var subtitle: String {
-        var parts: [String] = []
-        if model.stats.triangles > 0 { parts.append("\(Fmt.count(model.stats.triangles)) triangles") }
+        var parts = [model.stats.format]
+        if model.stats.triangles > 0 { parts.append("\(Fmt.count(model.stats.triangles)) tris") }
         if model.stats.bones > 0 { parts.append("\(model.stats.bones) bones") }
-        parts.append("\(model.clips.count) \(model.clips.count == 1 ? "animation" : "animations")")
-        return parts.joined(separator: " · ")
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
-    // MARK: transport
-    private var transport: some View {
-        HStack(spacing: 12) {
-            Button { model.isPlaying.toggle() } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 48, height: 48).contentShape(Circle()).contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain).glass(Circle(), tint: accent, interactive: true).disabled(model.clips.isEmpty)
-
-            Menu {
-                ForEach(Array(model.clips.enumerated()), id: \.element.id) { i, c in
-                    Button { model.play(i) } label: { Label(c.name, systemImage: i == model.currentClip ? "checkmark" : "film") }
+    // MARK: dock — playback header + inspector in a single glass panel
+    private func dock(height: CGFloat, landscape: Bool) -> some View {
+        let expanded = landscape || detent != .peek
+        return VStack(spacing: 0) {
+            header(landscape: landscape)
+            if expanded {
+                Picker("Inspector", selection: $tab) { ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) } }
+                    .pickerStyle(.segmented).padding(.horizontal, 12).padding(.bottom, 10)
+                ScrollView {
+                    InspectorContent(model: model, tab: tab, accentIndex: $accentIndex,
+                                     onFullScreen: enterFullScreen,
+                                     onSnapshot: { if let img = model.snapshot() { snapshot = SnapshotItem(image: img) } },
+                                     onAR: openAR)
+                        .padding(.horizontal, 12).padding(.bottom, 24)
                 }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(model.currentClip.map { model.clips[$0].name } ?? "No animation").font(.subheadline.weight(.semibold)).lineLimit(1)
-                        if model.clips.count > 1 { Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold)).foregroundStyle(.secondary) }
-                    }
-                    Text(model.currentClip.map { String(format: "%.1f s · %d of %d", model.clips[$0].duration, $0 + 1, model.clips.count) } ?? "This file has no animation")
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                .scrollIndicators(.hidden)
+                .transition(.opacity)
+            }
+        }
+        .frame(height: landscape ? nil : max(headerHeight, height), alignment: .top)
+        .frame(maxHeight: landscape ? .infinity : nil, alignment: .top)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .glass(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+
+    private func header(landscape: Bool) -> some View {
+        HStack(spacing: 10) {
+            if model.clips.isEmpty {
+                Image(systemName: "cube").font(.system(size: 18, weight: .semibold)).foregroundStyle(.secondary).frame(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("No animation").font(.subheadline.weight(.semibold))
+                    Text("\(Fmt.count(model.stats.vertices)) vertices · \(model.stats.materials) materials").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain).disabled(model.clips.isEmpty)
-
-            Menu {
-                ForEach([0.25, 0.5, 1.0, 1.5, 2.0], id: \.self) { s in Button("\(Fmt.speed(s))×") { model.speed = s } }
-            } label: {
-                Text("\(Fmt.speed(model.speed))×").font(.subheadline.weight(.semibold)).monospacedDigit().padding(.horizontal, 14).frame(height: 38)
-            }
-            .buttonStyle(.plain).glass(Capsule(), interactive: true)
-        }
-        .padding(.horizontal, 8).frame(height: 66)
-        .glass(Capsule())
-        .opacity(model.clips.isEmpty ? 0.7 : 1)
-    }
-
-    // MARK: inspector
-    private func inspector(height: CGFloat, landscape: Bool) -> some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 10) {
-                if !landscape { Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 40, height: 5).padding(.top, 8) }
-                Picker("Inspector", selection: $tab) { ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) } }
-                    .pickerStyle(.segmented).padding(.horizontal, 14).padding(.top, landscape ? 14 : 0)
-            }
-            .padding(.bottom, 10)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 6).onChanged { v in drag = v.translation.height }.onEnded { v in
-                let vy = v.predictedEndTranslation.height - v.translation.height
-                withAnimation(.spring(duration: 0.42, bounce: 0.12)) {
-                    if v.translation.height < -40 || vy < -200 { detent = Detent(rawValue: min(2, detent.rawValue + 1))! }
-                    else if v.translation.height > 40 || vy > 200 { detent = Detent(rawValue: max(0, detent.rawValue - 1))! }
-                    drag = 0
+            } else {
+                Button { model.isPlaying.toggle() } label: {
+                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44).background(accent, in: Circle()).contentShape(Circle())
+                        .contentTransition(.symbolEffect(.replace))
                 }
-            }, including: landscape ? .none : .all)
-            .onTapGesture { if !landscape && detent == .peek { detent = .medium } }
+                .buttonStyle(.plain).accessibilityLabel(model.isPlaying ? "Pause" : "Play")
 
-            ScrollView {
-                InspectorContent(model: model, tab: tab, accentIndex: $accentIndex,
-                                 onFullScreen: { withAnimation { immersive = true } },
-                                 onSnapshot: { if let img = model.snapshot() { snapshot = SnapshotItem(image: img) } },
-                                 onAR: openAR)
-                    .padding(.horizontal, 14).padding(.bottom, 40)
+                Menu {
+                    ForEach(Array(model.clips.enumerated()), id: \.element.id) { i, c in
+                        Button { model.play(i) } label: { Label(c.name, systemImage: i == model.currentClip ? "checkmark" : "film") }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Text(model.currentClip.map { model.clips[$0].name } ?? "Choose animation").font(.subheadline.weight(.semibold)).lineLimit(1)
+                            if model.clips.count > 1 { Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold)).foregroundStyle(.secondary) }
+                        }
+                        Text(model.currentClip.map { String(format: "%.1f s · %d of %d", model.clips[$0].duration, $0 + 1, model.clips.count) } ?? "")
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Menu {
+                    ForEach([0.25, 0.5, 1.0, 1.5, 2.0], id: \.self) { s in Button("\(Fmt.speed(s))×") { model.speed = s } }
+                } label: {
+                    Text("\(Fmt.speed(model.speed))×").font(.footnote.weight(.semibold)).monospacedDigit().padding(.horizontal, 11).frame(height: 32)
+                        .background(Color.primary.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .scrollIndicators(.hidden)
-            .opacity(detent == .peek && !landscape ? 0 : 1)
+
+            Button(action: enterFullScreen) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 15, weight: .semibold)).frame(width: 36, height: 36)
+                    .background(Color.primary.opacity(0.08), in: Circle())
+            }
+            .buttonStyle(.plain).accessibilityLabel("Full screen")
+
+            if !landscape {
+                Button { detent = detent == .peek ? .medium : .peek } label: {
+                    Image(systemName: "chevron.up").font(.system(size: 14, weight: .bold)).rotationEffect(.degrees(detent == .peek ? 0 : 180))
+                        .frame(width: 36, height: 36).background(Color.primary.opacity(0.08), in: Circle())
+                }
+                .buttonStyle(.plain).accessibilityLabel(detent == .peek ? "Show details" : "Hide details")
+            }
         }
-        .frame(height: max(96, height)).frame(maxWidth: .infinity)
-        .glass(RoundedRectangle(cornerRadius: landscape ? 30 : 38, style: .continuous))
-        .padding(.horizontal, landscape ? 0 : (detent == .large ? 0 : 8))
+        .padding(.horizontal, 12).frame(height: headerHeight)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 8).onChanged { v in drag = max(-200, min(200, v.translation.height)) }.onEnded { v in
+            let vy = v.predictedEndTranslation.height
+            withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
+                if vy < -60 { detent = Detent(rawValue: min(2, detent.rawValue + 1))! }
+                else if vy > 60 { detent = Detent(rawValue: max(0, detent.rawValue - 1))! }
+                drag = 0
+            }
+        }, including: landscape ? .none : .all)
     }
 
     private func openAR() {
