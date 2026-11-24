@@ -25,7 +25,7 @@ final class StudioModel: ObservableObject {
     let sunNode = SCNNode()
 
     // MARK: published state
-    @Published private(set) var objects: [StudioObject] = []
+    @Published var objects: [StudioObject] = []
     @Published var selection: Set<UUID> = [] { didSet { selectionChanged() } }
     @Published private(set) var primaryID: UUID?
     @Published var mode: StudioMode = .object { didSet { modeChanged(from: oldValue) } }
@@ -38,11 +38,26 @@ final class StudioModel: ObservableObject {
     @Published var projectName = "Untitled Model"
     @Published private(set) var revision = 0
     @Published var toast: String?
+    @Published var busy: String?
+
+    // Studio 2
+    @Published var lastOp: LastOperation?
+    @Published var shading: ViewShading = .material { didSet { refreshAllMaterials() } }
+    @Published var world = WorldSettings() { didSet { applyWorld() } }
+    @Published var proportional = false
+    @Published var proportionalRadius: Double = 0.4
+    @Published var paintColor = Color(red: 0.9, green: 0.2, blue: 0.2)
+    @Published var paintBlur = false
+    @Published var remeshResolution: Double = 64
+    @Published var voxelResolution: Double = 72
+    var dragWeights: [(Int, Float)] = []
+    var keepLastOpOnPush = false
+    var paintStrokeActive = false
 
     // Edit-mode selection (indices into the primary object's mesh)
-    @Published private(set) var selVerts: Set<Int> = []
-    @Published private(set) var selEdges: Set<EditMesh.Edge> = []
-    @Published private(set) var selFaces: Set<Int> = []
+    @Published var selVerts: Set<Int> = []
+    @Published var selEdges: Set<EditMesh.Edge> = []
+    @Published var selFaces: Set<Int> = []
 
     // Sculpt
     @Published var brush: SculptBrush = .draw
@@ -100,6 +115,7 @@ final class StudioModel: ObservableObject {
         let rm = SCNMaterial(); rm.lightingModel = .constant; rm.diffuse.contents = UIColor.white; rm.readsFromDepthBuffer = false
         ring.materials = [rm]; brushRing.geometry = ring; brushRing.isHidden = true; brushRing.renderingOrder = 3000
         brushRing.categoryBitMask = Self.helperMask
+        applyWorld()
     }
 
     func attach(_ v: SCNView) {
@@ -155,7 +171,7 @@ final class StudioModel: ObservableObject {
         }
     }
 
-    private func touch() { revision &+= 1; dirty = true }
+    func touch() { revision &+= 1; dirty = true }
 
     func material(for o: StudioObject) -> SCNMaterial {
         let r = o.material
@@ -168,12 +184,24 @@ final class StudioModel: ObservableObject {
         if r.emission > 0.01 { m.emission.contents = UIColor(red: CGFloat(r.r * r.emission), green: CGFloat(r.g * r.emission), blue: CGFloat(r.b * r.emission), alpha: 1) }
         if r.opacity < 0.999 { m.transparency = CGFloat(r.opacity); m.blendMode = .alpha; m.transparencyMode = .dualLayer }
         m.isDoubleSided = r.doubleSided
+        if o.textureImage != nil, let t = r.tiling, t > 0, t != 1 { m.diffuse.contentsTransform = SCNMatrix4MakeScale(t, t, 1) }
+        switch shading {
+        case .material: break
+        case .solid:
+            m.diffuse.contents = UIColor(white: 0.8, alpha: 1); m.diffuse.contentsTransform = SCNMatrix4Identity
+            m.roughness.contents = NSNumber(value: 0.55); m.metalness.contents = NSNumber(value: 0)
+            m.emission.contents = UIColor.black; m.transparency = 1
+        case .wireframe:
+            m.fillMode = .lines; m.lightingModel = .constant; m.diffuse.contents = UIColor.label; m.isDoubleSided = true
+        }
         return m
     }
 
     /// Rebuilds an object's geometry from its mesh (after any edit).
     func rebuild(_ o: StudioObject, keepMaterial: Bool = true) {
-        guard let mesh = o.mesh else { return }
+        guard let base = o.mesh else { return }
+        let editing = o.id == primaryID && (mode == .edit || mode == .sculpt || mode == .paint)
+        let mesh = (editing || !o.modifiers.contains { $0.enabled }) ? base : base.evaluated(o.modifiers)
         let (g, tf) = mesh.makeGeometry()
         g.materials = [keepMaterial ? (o.node.geometry?.firstMaterial ?? material(for: o)) : material(for: o)]
         o.node.geometry = g
@@ -200,24 +228,7 @@ final class StudioModel: ObservableObject {
         return o
     }
 
-    func addPrimitive(_ p: Primitive) {
-        pushUndo()
-        if mode != .object { mode = .object }
-        let mesh = p.mesh()
-        let o = StudioObject(name: uniqueName(p.rawValue), mesh: mesh,
-                             material: p == .clay ? MaterialRecord.presets[0].1 : MaterialRecord())
-        let b = mesh.bounds
-        // Sit new shapes on the floor, slightly offset if something is already at the centre.
-        var x: Float = 0
-        let occupied = objects.filter { !$0.hidden }.map { $0.node.simdPosition.x }
-        while occupied.contains(where: { abs($0 - x) < 0.6 }) && x < 20 { x += 1.2 }
-        o.node.simdPosition = SIMD3(x, -b.min.y, 0)
-        add(o)
-        if objects.count == 1 { focusSelection() }
-        Haptics.tap()
-    }
-
-    private func uniqueName(_ base: String) -> String {
+    func uniqueName(_ base: String) -> String {
         let names = Set(objects.map(\.name))
         if !names.contains(base) { return base }
         var i = 2; while names.contains("\(base) \(i)") { i += 1 }
@@ -231,6 +242,8 @@ final class StudioModel: ObservableObject {
         for o in selectedObjects where !o.isImported {
             let c = StudioObject(name: uniqueName(o.name), mesh: o.mesh, material: o.material)
             c.textureImage = o.textureImage
+            c.modifiers = o.modifiers.map { var r = $0; r.id = UUID(); return r }
+            if let l = o.light { c.light = l; configureLight(c) }
             c.node.simdTransform = o.node.simdTransform
             c.node.simdPosition += SIMD3(0.35, 0, 0.35)
             add(c, select: false)
@@ -259,12 +272,12 @@ final class StudioModel: ObservableObject {
     /// Joins the selected meshes into the primary one.
     func joinSelection() {
         guard let p = primary, var mesh = p.mesh else { return }
-        let others = selectedObjects.filter { $0.id != p.id && !$0.isImported }
+        let others = selectedObjects.filter { $0.id != p.id && $0.mesh != nil }
         guard !others.isEmpty else { showToast("Select two or more shapes to join"); return }
         pushUndo()
         let inv = p.node.simdWorldTransform.inverse
         for o in others {
-            guard var m = o.mesh else { continue }
+            guard var m = o.mesh?.evaluated(o.modifiers) else { continue }
             m.apply(inv * o.node.simdWorldTransform)
             mesh.append(m)
             o.node.removeFromParentNode()
@@ -327,10 +340,15 @@ final class StudioModel: ObservableObject {
     // MARK: selection
 
     private func selectionChanged() {
+        let oldPrimary = primaryID
         if let p = primaryID, selection.contains(p) {} else { primaryID = selection.first }
+        if lastOp != nil && lastOp?.objectID != primaryID { lastOp = nil }
+        if oldPrimary != primaryID && (mode == .edit || mode == .sculpt || mode == .paint) {
+            for o in objects where o.id == oldPrimary || o.id == primaryID { if !o.modifiers.isEmpty { rebuild(o) } }
+        }
         if selection.isEmpty { primaryID = nil }
         clearEditSelection()
-        if mode == .edit || mode == .sculpt {
+        if mode == .edit || mode == .sculpt || mode == .paint {
             if primary?.mesh == nil { mode = .object }
         }
         refreshOverlay()
@@ -339,7 +357,7 @@ final class StudioModel: ObservableObject {
 
     func setPrimary(_ id: UUID) { primaryID = id }
 
-    private func clearEditSelection() { selVerts = []; selEdges = []; selFaces = [] }
+    func clearEditSelection() { selVerts = []; selEdges = []; selFaces = [] }
 
     func selectAll() {
         if mode == .edit, let m = primary?.mesh {
@@ -407,7 +425,7 @@ final class StudioModel: ObservableObject {
     func handleTap(at p: CGPoint) {
         guard let v = view else { return }
         switch mode {
-        case .object, .sculpt:
+        case .object, .sculpt, .paint:
             let hits = v.hitTest(p, options: [.categoryBitMask: Self.objectMask, .searchMode: SCNHitTestSearchMode.closest.rawValue, .ignoreHiddenNodes: true])
             if let hit = hits.first, let o = owner(of: hit.node) {
                 if multiSelect {
@@ -424,7 +442,7 @@ final class StudioModel: ObservableObject {
         }
     }
 
-    private func owner(of node: SCNNode) -> StudioObject? {
+    func owner(of node: SCNNode) -> StudioObject? {
         var n: SCNNode? = node
         while let c = n {
             if let o = objects.first(where: { $0.node === c }) { return o }
@@ -433,7 +451,7 @@ final class StudioModel: ObservableObject {
         return nil
     }
 
-    private func project(_ w: SIMD3<Float>) -> SIMD3<Float> {
+    func project(_ w: SIMD3<Float>) -> SIMD3<Float> {
         guard let v = view else { return .zero }
         let p = v.projectPoint(SCNVector3(w))
         return SIMD3(Float(p.x), Float(p.y), Float(p.z))
@@ -554,18 +572,24 @@ final class StudioModel: ObservableObject {
     private func modeChanged(from old: StudioMode) {
         if old == .pose { posePlaying = false; jointsRoot.childNodes.forEach { $0.removeFromParentNode() } }
         switch mode {
-        case .edit, .sculpt:
+        case .edit, .sculpt, .paint:
             if primary?.mesh == nil {
                 if let first = objects.first(where: { $0.mesh != nil && !$0.hidden }) { selection = [first.id] }
                 else { showToast("Add or convert a shape first"); mode = .object; return }
             }
             if mode == .sculpt, let p = primary, var m = p.mesh, !m.smooth { m.smooth = true; p.mesh = m; rebuild(p) }
-            if mode == .sculpt, let m = primary?.mesh, m.vertexCount < 1500 { showToast("Tip: tap Add Detail for smoother sculpting") }
+            if mode == .sculpt, let m = primary?.mesh, m.vertexCount < 1500 { showToast("Tip: tap Add Detail or Remesh for smoother sculpting") }
+            if mode == .paint, let p = primary, var m = p.mesh, m.colors?.count != m.vertexCount {
+                m.colors = [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: m.vertexCount); p.mesh = m
+            }
+            if mode == .paint, let m = primary?.mesh, m.vertexCount < 2000 { showToast("Tip: subdivide or remesh for finer painting") }
         case .pose:
             collectBones()
-            if bones.isEmpty { showToast("Pose needs a rigged model. Open one in the viewer, then tap Studio."); mode = .object; return }
+            if bones.isEmpty { showToast("Add a shape or bring in a rigged model to animate."); mode = .object; return }
         case .object: break
         }
+        lastOp = nil
+        for o in objects where o.mesh != nil && (!o.modifiers.isEmpty || old == .paint || mode == .paint) { rebuild(o) }
         clearEditSelection()
         applyXray()
         refreshOverlay()
@@ -590,7 +614,7 @@ final class StudioModel: ObservableObject {
         case .object: return !selection.isEmpty
         case .edit: return !editVertices.isEmpty
         case .pose: return selectedBone != nil
-        case .sculpt: return false
+        case .sculpt, .paint: return false
         }
     }
 
@@ -605,7 +629,7 @@ final class StudioModel: ObservableObject {
             var c = SIMD3<Float>(repeating: 0); for v in vs { c += m.positions[v] }; c /= Float(vs.count)
             return o.node.simdConvertPosition(c, to: nil)
         case .pose: return selectedBone?.node.simdWorldPosition
-        case .sculpt: return nil
+        case .sculpt, .paint: return nil
         }
     }
 
@@ -657,7 +681,7 @@ final class StudioModel: ObservableObject {
 
     /// What a one-finger drag starting here would do (nil = orbit the camera).
     func dragTarget(at p: CGPoint) -> String? {
-        if mode == .sculpt {
+        if mode == .sculpt || mode == .paint {
             guard let o = primary, let v = view else { return nil }
             let hits = v.hitTest(p, options: [.rootNode: o.node, .searchMode: SCNHitTestSearchMode.closest.rawValue])
             return hits.contains { $0.node === o.node } ? "sculpt" : nil
@@ -700,6 +724,7 @@ final class StudioModel: ObservableObject {
 
     func dragBegan(at p: CGPoint) {
         if mode == .sculpt { sculptBegan(at: p); return }
+        if mode == .paint { paintBegan(at: p); return }
         guard let h = handle(at: p), let piv = pivot else { return }
         pushUndo()
         dragHandle = h; dragStart = p; startPivot = piv
@@ -710,14 +735,16 @@ final class StudioModel: ObservableObject {
             for o in selectedObjects { startTransforms[o.id] = (o.node.simdPosition, o.node.simdOrientation, o.node.simdScale) }
         case .edit:
             startPositions = primary?.mesh?.positions ?? []
+            dragWeights = computeDragWeights()
         case .pose:
             if let b = selectedBone?.node { startBone = (b.simdWorldPosition, b.simdWorldOrientation, b.simdScale) }
-        case .sculpt: break
+        case .sculpt, .paint: break
         }
     }
 
     func dragChanged(at p: CGPoint, translation t: CGPoint) {
         if mode == .sculpt { sculptChanged(at: p, translation: t); return }
+        if mode == .paint { paintChanged(at: p); return }
         guard let h = dragHandle, let v = view else { return }
         let piv = startPivot
         let camRight = cameraNode.simdWorldRight, camUp = cameraNode.simdWorldUp
@@ -756,6 +783,7 @@ final class StudioModel: ObservableObject {
 
     func dragEnded() {
         if mode == .sculpt { sculptEnded(); return }
+        if mode == .paint { paintEnded(); return }
         dragHandle = nil
         startBone = nil
         touch()
@@ -778,11 +806,11 @@ final class StudioModel: ObservableObject {
             let inv = o.node.simdWorldTransform.inverse
             let ld4 = inv * SIMD4(delta, 0); let ld = SIMD3(ld4.x, ld4.y, ld4.z)
             m.positions = startPositions
-            for v in editVertices where v < m.positions.count { m.positions[v] += ld }
+            for (v, w) in dragWeights where v < m.positions.count { m.positions[v] += ld * w }
             o.mesh = m; rebuild(o)
         case .pose:
             if let b = selectedBone?.node, let s = startBone { b.simdWorldPosition = s.0 + delta }
-        case .sculpt: break
+        case .sculpt, .paint: break
         }
     }
 
@@ -801,11 +829,14 @@ final class StudioModel: ObservableObject {
             let la4 = inv * SIMD4(q.axis, 0); let la = simd_length(SIMD3(la4.x, la4.y, la4.z)) > 0 ? simd_normalize(SIMD3(la4.x, la4.y, la4.z)) : SIMD3<Float>(0, 1, 0)
             let lq = simd_quatf(angle: q.angle, axis: la)
             m.positions = startPositions
-            for v in editVertices where v < m.positions.count { m.positions[v] = lp + lq.act(startPositions[v] - lp) }
+            for (v, w) in dragWeights where v < m.positions.count {
+                let r = lp + lq.act(startPositions[v] - lp)
+                m.positions[v] = startPositions[v] + (r - startPositions[v]) * w
+            }
             o.mesh = m; rebuild(o)
         case .pose:
             if let b = selectedBone?.node, let s = startBone { b.simdWorldOrientation = q * s.1 }
-        case .sculpt: break
+        case .sculpt, .paint: break
         }
     }
 
@@ -822,18 +853,18 @@ final class StudioModel: ObservableObject {
             let inv = o.node.simdWorldTransform.inverse
             let lp4 = inv * SIMD4(startPivot, 1); let lp = SIMD3(lp4.x, lp4.y, lp4.z)
             m.positions = startPositions
-            for v in editVertices where v < m.positions.count {
+            for (v, w) in dragWeights where v < m.positions.count {
                 var d = startPositions[v] - lp
                 for i in 0..<3 where f[i] != 1 {
                     let a4 = inv * SIMD4(axes[i], 0); let a = simd_normalize(SIMD3(a4.x, a4.y, a4.z))
                     d += a * simd_dot(d, a) * (f[i] - 1)
                 }
-                m.positions[v] = lp + d
+                m.positions[v] = startPositions[v] + (lp + d - startPositions[v]) * w
             }
             o.mesh = m; rebuild(o)
         case .pose:
             if let b = selectedBone?.node, let s = startBone { b.simdScale = s.2 * f }
-        case .sculpt: break
+        case .sculpt, .paint: break
         }
     }
 
@@ -849,7 +880,7 @@ final class StudioModel: ObservableObject {
 
     // MARK: edit operations
 
-    private func editOp(_ name: String, _ body: (inout EditMesh) -> Void) {
+    func editOp(_ name: String, _ body: (inout EditMesh) -> Void) {
         guard let o = primary, var m = o.mesh else { return }
         pushUndo()
         body(&m)
@@ -859,44 +890,6 @@ final class StudioModel: ObservableObject {
         touch()
         Haptics.tap()
         showToast(name)
-    }
-
-    func extrude() {
-        if selectMode != .face { selectMode = .face }
-        let faces = editFaces
-        guard !faces.isEmpty, let m = primary?.mesh else { showToast("Select faces to extrude"); return }
-        let size = simd_length(m.bounds.max - m.bounds.min)
-        editOp("Extruded — drag the arrows to adjust") { mesh in selFaces = mesh.extrude(faces: faces, distance: size * 0.12) }
-        refreshOverlay(); buildGizmo()
-    }
-
-    func inset() {
-        if selectMode != .face { selectMode = .face }
-        let faces = editFaces
-        guard !faces.isEmpty else { showToast("Select faces to inset"); return }
-        editOp("Inset") { mesh in selFaces = mesh.inset(faces: faces, amount: 0.25) }
-        refreshOverlay(); buildGizmo()
-    }
-
-    func bevel() {
-        if selectMode != .face { selectMode = .face }
-        let faces = editFaces
-        guard !faces.isEmpty, let m = primary?.mesh else { showToast("Select faces to bevel"); return }
-        let size = simd_length(m.bounds.max - m.bounds.min)
-        editOp("Bevelled") { mesh in selFaces = mesh.bevel(faces: faces, width: size * 0.03) }
-        refreshOverlay(); buildGizmo()
-    }
-
-    func subdivide(smooth: Bool) {
-        guard let m = primary?.mesh else { return }
-        if m.faceCount * 4 > 220_000 { showToast("That would be too many faces for a phone"); return }
-        clearEditSelection()
-        editOp(smooth ? "Subdivided (smooth)" : "Subdivided") { mesh in mesh = smooth ? mesh.catmullClark() : mesh.subdivideFlat() }
-    }
-
-    func smoothSelection() {
-        let v = editVertices
-        editOp(v.isEmpty ? "Smoothed whole mesh" : "Smoothed") { mesh in mesh.smoothVertices(v) }
     }
 
     func mergeSelection() {
@@ -935,21 +928,21 @@ final class StudioModel: ObservableObject {
 
     // MARK: sculpt
 
-    private var sculptNeighbors: [[Int]] = []
+    var sculptNeighbors: [[Int]] = []
     private var grabCaptured: [(Int, Float)] = []
     private var grabStart: [SIMD3<Float>] = []
     private var grabDepth: Float = 0
     private var grabStartWorld = SIMD3<Float>(repeating: 0)
-    private var lastDab = CGPoint(x: -999, y: -999)
+    var lastDab = CGPoint(x: -999, y: -999)
 
-    private func sculptHit(at p: CGPoint) -> (SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)? {
+    func sculptHit(at p: CGPoint) -> (SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)? {
         guard let o = primary, let v = view else { return nil }
         let hits = v.hitTest(p, options: [.rootNode: o.node, .searchMode: SCNHitTestSearchMode.closest.rawValue])
         guard let h = hits.first(where: { $0.node === o.node }) else { return nil }
         return (SIMD3(h.localCoordinates), simd_normalize(SIMD3(h.localNormal)), SIMD3(h.worldCoordinates))
     }
 
-    private var brushWorldRadius: Float {
+    var brushWorldRadius: Float {
         guard let m = primary?.mesh else { return 0.1 }
         return simd_length(m.bounds.max - m.bounds.min) * Float(brushRadius) * 0.5
     }
@@ -1010,7 +1003,7 @@ final class StudioModel: ObservableObject {
         touch()
     }
 
-    private func showBrush(at p: SIMD3<Float>, normal n: SIMD3<Float>, radius r: Float) {
+    func showBrush(at p: SIMD3<Float>, normal n: SIMD3<Float>, radius r: Float) {
         brushRing.isHidden = false
         brushRing.simdPosition = p
         let up = SIMD3<Float>(0, 1, 0)
@@ -1021,7 +1014,7 @@ final class StudioModel: ObservableObject {
 
     // MARK: pose
 
-    private func collectBones() {
+    func collectBones() {
         var set = Set<ObjectIdentifier>(); var boneNodes: [SCNNode] = []
         for o in objects where !o.hidden {
             o.node.enumerateHierarchy { n, _ in
@@ -1031,10 +1024,15 @@ final class StudioModel: ObservableObject {
         if boneNodes.isEmpty {
             for o in objects { o.node.enumerateHierarchy { n, _ in if n.name?.hasPrefix("joint:") == true { set.insert(ObjectIdentifier(n)); boneNodes.append(n) } } }
         }
+        var labels: [ObjectIdentifier: String] = [:]
+        if boneNodes.isEmpty {
+            // No rig: animate the objects themselves (Blender's object keyframes).
+            for o in objects where !o.hidden && !o.isImported { set.insert(ObjectIdentifier(o.node)); boneNodes.append(o.node); labels[ObjectIdentifier(o.node)] = o.name }
+        }
         var out: [BoneInfo] = []
         func walk(_ n: SCNNode, _ depth: Int) {
             let isBone = set.contains(ObjectIdentifier(n))
-            if isBone { out.append(BoneInfo(node: n, depth: depth)) }
+            if isBone { out.append(BoneInfo(node: n, depth: depth, label: labels[ObjectIdentifier(n)])) }
             for c in n.childNodes { walk(c, isBone ? depth + 1 : depth) }
         }
         walk(contentRoot, 0)
@@ -1045,7 +1043,7 @@ final class StudioModel: ObservableObject {
     private func currentTransform(_ n: SCNNode) -> PoseTransform { PoseTransform(p: n.simdPosition, q: n.simdOrientation, s: n.simdScale) }
     private func set(_ n: SCNNode, _ t: PoseTransform) { n.simdPosition = t.p; n.simdOrientation = t.q; n.simdScale = t.s }
 
-    private func buildJoints() {
+    func buildJoints() {
         jointsRoot.childNodes.forEach { $0.removeFromParentNode() }
         let r = max(0.008, (primaryRadius ?? 1) * 0.018)
         for b in bones {
@@ -1227,17 +1225,18 @@ final class StudioModel: ObservableObject {
 
     // MARK: undo
 
-    private func snapshot() -> StudioSnapshot {
+    func snapshot() -> StudioSnapshot {
         var pose: [ObjectIdentifier: PoseTransform] = [:]
         for b in bones { pose[ObjectIdentifier(b.node)] = currentTransform(b.node) }
         return StudioSnapshot(objects: objects.map(record), order: objects.map(\.id), pose: pose)
     }
 
     private func record(_ o: StudioObject) -> ObjectRecord {
-        ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: o.material, transform: TransformRecord(o.node), hidden: o.hidden)
+        ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: o.material, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light)
     }
 
     func pushUndo() {
+        if !keepLastOpOnPush { lastOp = nil }
         undoStack.append(snapshot())
         if undoStack.count > 40 { undoStack.removeFirst() }
         redoStack = []
@@ -1254,6 +1253,8 @@ final class StudioModel: ObservableObject {
         for r in s.objects {
             let o = byID[r.id] ?? StudioObject(id: r.id, name: r.name, mesh: r.mesh, material: r.material)
             o.name = r.name; o.mesh = r.mesh; o.material = r.material; o.hidden = r.hidden
+            o.modifiers = r.modifiers ?? []
+            if o.light != r.light { o.light = r.light; configureLight(o) }
             r.transform.apply(to: o.node)
             o.node.isHidden = r.hidden
             if o.node.parent == nil { contentRoot.addChildNode(o.node) }

@@ -8,6 +8,8 @@ struct EditMesh: Codable {
     /// Optional per-face-corner UVs (empty array = generated box mapping for that face).
     var faceUVs: [[SIMD2<Float>]] = []
     var smooth = false
+    /// Optional per-vertex colours (vertex paint). Same count as `positions` when present.
+    var colors: [SIMD4<Float>]? = nil
 
     var vertexCount: Int { positions.count }
     var faceCount: Int { faces.count }
@@ -87,6 +89,8 @@ struct EditMesh: Codable {
         var pos: [Float] = [], nrm: [Float] = [], uv: [Float] = []
         var idx: [UInt32] = []; var triFace: [Int32] = []
         let vn = smooth ? vertexNormals() : []
+        let vcol: [SIMD4<Float>]? = (colors?.count == positions.count) ? colors : nil
+        var col: [Float] = []
         pos.reserveCapacity(faces.count * 12); nrm.reserveCapacity(faces.count * 12); uv.reserveCapacity(faces.count * 8)
         for (fi, f) in faces.enumerated() where f.count >= 3 {
             let n = faceNormal(f)
@@ -98,6 +102,7 @@ struct EditMesh: Codable {
                 pos += [p.x, p.y, p.z]
                 let nn = smooth ? vn[v] : n
                 nrm += [nn.x, nn.y, nn.z]
+                if let vcol { let c = vcol[v]; col += [c.x, c.y, c.z, c.w] }
                 if let uvs { uv += [uvs[ci].x, uvs[ci].y] }
                 else if a.x >= a.y && a.x >= a.z { uv += [p.z, -p.y] }
                 else if a.y >= a.z { uv += [p.x, -p.z] }
@@ -113,7 +118,11 @@ struct EditMesh: Codable {
         let ns = SCNGeometrySource(data: nrm.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .normal, vectorCount: count, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: 12)
         let ts = SCNGeometrySource(data: uv.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .texcoord, vectorCount: count, usesFloatComponents: true, componentsPerVector: 2, bytesPerComponent: 4, dataOffset: 0, dataStride: 8)
         let el = SCNGeometryElement(data: idx.withUnsafeBufferPointer { Data(buffer: $0) }, primitiveType: .triangles, primitiveCount: idx.count / 3, bytesPerIndex: 4)
-        return (SCNGeometry(sources: [ps, ns, ts], elements: [el]), triFace)
+        var sources = [ps, ns, ts]
+        if vcol != nil, col.count == count * 4 {
+            sources.append(SCNGeometrySource(data: col.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .color, vectorCount: count, usesFloatComponents: true, componentsPerVector: 4, bytesPerComponent: 4, dataOffset: 0, dataStride: 16))
+        }
+        return (SCNGeometry(sources: sources, elements: [el]), triFace)
     }
 
     // MARK: - primitives
@@ -329,6 +338,13 @@ struct EditMesh: Codable {
                 out.faces.append([v, eIndex[Edge(v, nx)]!, fBase + fi, eIndex[Edge(pv, v)]!])
             }
         }
+        if let c = colors, c.count == positions.count {
+            var oc = c
+            for f in faces { var s = SIMD4<Float>(repeating: 0); for v in f { s += c[v] }; oc.append(s / Float(max(f.count, 1))) }
+            var ec = [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: eIndex.count)
+            for (e, i) in eIndex { ec[i - fBase - faces.count] = (c[e.a] + c[e.b]) / 2 }
+            out.colors = oc + ec
+        }
         return out
     }
 
@@ -387,8 +403,11 @@ struct EditMesh: Codable {
         var used = [Bool](repeating: false, count: positions.count)
         for f in faces { for v in f { used[v] = true } }
         var remap = [Int](repeating: -1, count: positions.count); var np: [SIMD3<Float>] = []
-        for (i, u) in used.enumerated() where u { remap[i] = np.count; np.append(positions[i]) }
+        let oldColors = colors?.count == positions.count ? colors : nil
+        var nc: [SIMD4<Float>] = []
+        for (i, u) in used.enumerated() where u { remap[i] = np.count; np.append(positions[i]); if let oldColors { nc.append(oldColors[i]) } }
         positions = np
+        colors = oldColors == nil ? nil : nc
         faces = faces.map { $0.map { remap[$0] } }
     }
 
@@ -440,6 +459,7 @@ struct EditMesh: Codable {
     /// Mirrors across X (local) and welds the seam, for symmetric modelling.
     mutating func mirrorX() {
         let n = positions.count
+        if let c = colors, c.count == n { colors = c + c }
         positions += positions.map { SIMD3(-$0.x, $0.y, $0.z) }
         faces += faces.map { f in Array(f.map { $0 + n }.reversed()) }
         weld(distance: max(simd_length(bounds.max - bounds.min) * 1e-4, 1e-5))
@@ -489,6 +509,11 @@ struct EditMesh: Codable {
     mutating func append(_ o: EditMesh) {
         normalizeUVs()
         let n = positions.count
+        if colors != nil || o.colors != nil {
+            let a = colors?.count == n ? colors! : [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: n)
+            let b = o.colors?.count == o.positions.count ? o.colors! : [SIMD4<Float>](repeating: SIMD4(1, 1, 1, 1), count: o.positions.count)
+            colors = a + b
+        }
         positions += o.positions
         faces += o.faces.map { $0.map { $0 + n } }
         var ouv = o.faceUVs; if ouv.count != o.faces.count { ouv = Array(repeating: [], count: o.faces.count) }
@@ -578,12 +603,15 @@ struct EditMesh: Codable {
 
 enum SculptBrush: String, CaseIterable, Identifiable {
     case draw = "Draw", clay = "Clay", smooth = "Smooth", inflate = "Inflate", grab = "Grab", flatten = "Flatten", pinch = "Pinch"
+    case crease = "Crease", layer = "Layer", scrape = "Scrape", blob = "Blob"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .draw: return "paintbrush.pointed.fill"; case .clay: return "hand.point.up.fill"; case .smooth: return "drop.fill"
         case .inflate: return "circle.circle.fill"; case .grab: return "hand.draw.fill"; case .flatten: return "rectangle.compress.vertical"
         case .pinch: return "arrow.down.right.and.arrow.up.left"
+        case .crease: return "chevron.compact.down"; case .layer: return "square.3.layers.3d.top.filled"
+        case .scrape: return "eraser.line.dashed"; case .blob: return "circle.hexagongrid.circle"
         }
     }
 }
@@ -633,6 +661,19 @@ extension EditMesh {
                 let toward = center - old[i]
                 let tangential = toward - areaN * simd_dot(toward, areaN)
                 positions[i] += tangential * (k * 0.25 * sign)
+            case .crease:
+                let toward = center - old[i]
+                let tangential = toward - areaN * simd_dot(toward, areaN)
+                positions[i] += tangential * (k * 0.3) - areaN * (k * r * 0.1 * sign)
+            case .layer:
+                let plane = areaC + areaN * (r * 0.06 * sign)
+                let dist = simd_dot(plane - old[i], areaN)
+                if dist * sign > 0 { positions[i] += areaN * dist * min(1, k * 1.5) }
+            case .scrape:
+                let dist = simd_dot(old[i] - areaC, areaN)
+                if dist * sign > 0 { positions[i] -= areaN * dist * k * 0.8 }
+            case .blob:
+                positions[i] += (vn[i] * 0.6 + areaN * 0.4) * (k * r * 0.12 * sign)
             case .grab:
                 break   // handled by `grab(…)`
             }

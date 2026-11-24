@@ -56,7 +56,7 @@ enum GLBWriter {
         for r in roots where !r.isHidden {
             r.enumerateHierarchy { n, stop in
                 if n.isHidden { return }
-                if n.geometry != nil, n.categoryBitMask & StudioModel.helperMask == 0, n.name != "joint-marker" { geoNodes.append(n) }
+                if n.geometry != nil, n.categoryBitMask & StudioModel.helperMask == 0, n.name != "joint-marker", n.name != "light-gizmo" { geoNodes.append(n) }
             }
         }
         let baseInv = base.simdWorldTransform.inverse
@@ -83,6 +83,14 @@ enum GLBWriter {
                 var f: [Float] = []; f.reserveCapacity(uv.count * 2); for v in uv { f += [v[0], v[1]] }
                 accessors.append(["bufferView": addView(floats(f), target: 34962), "componentType": 5126, "count": uv.count, "type": "VEC2"])
                 attributes["TEXCOORD_0"] = accessors.count - 1
+            }
+            if let cs = g.sources(for: .color).first {
+                let cols = EditMesh.readVectors(cs, 4)
+                if cols.count == pos.count {
+                    var f: [Float] = []; f.reserveCapacity(cols.count * 4); let hasA = cs.componentsPerVector > 3; for c in cols { f += [c[0], c[1], c[2], hasA ? c[3] : 1] }
+                    accessors.append(["bufferView": addView(floats(f), target: 34962), "componentType": 5126, "count": cols.count, "type": "VEC4"])
+                    attributes["COLOR_0"] = accessors.count - 1
+                }
             }
             var prims: [[String: Any]] = []
             let flipped = simd_determinant(m) < 0

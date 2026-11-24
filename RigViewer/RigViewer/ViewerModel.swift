@@ -16,8 +16,9 @@ struct ClipInfo: Identifiable {
 struct BoneInfo: Identifiable, Hashable {
     let node: SCNNode
     let depth: Int
+    var label: String? = nil
     var id: ObjectIdentifier { ObjectIdentifier(node) }
-    var name: String { let n = node.name ?? "Bone"; return n.hasPrefix("joint:") ? String(n.dropFirst(6)) : n }
+    var name: String { if let label { return label }; let n = node.name ?? "Bone"; return n.hasPrefix("joint:") ? String(n.dropFirst(6)) : n }
     static func == (a: BoneInfo, b: BoneInfo) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
 }

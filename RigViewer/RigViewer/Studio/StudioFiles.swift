@@ -30,9 +30,9 @@ extension StudioModel {
                 try? png.write(to: projectDir.appendingPathComponent("textures").appendingPathComponent(name))
                 m.texture = name
             } else { m.texture = nil }
-            records.append(ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: m, transform: TransformRecord(o.node), hidden: o.hidden))
+            records.append(ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: m, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light))
         }
-        let file = StudioProjectFile(name: projectName, objects: records)
+        let file = StudioProjectFile(name: projectName, objects: records, world: world)
         if let data = try? JSONEncoder().encode(file) { try? data.write(to: projectDir.appendingPathComponent("project.json"), options: .atomic) }
         if let img = cleanSnapshot(), let jpg = ViewerModel.squareThumb(img)?.jpegData(compressionQuality: 0.8) {
             try? jpg.write(to: projectDir.appendingPathComponent("thumb.jpg"))
@@ -62,11 +62,15 @@ extension StudioModel {
               let file = try? JSONDecoder().decode(StudioProjectFile.self, from: data) else { return nil }
         let m = StudioModel(projectID: id)
         m.projectName = file.name
+        if let w = file.world { m.world = w }
         for r in file.objects {
             let o = StudioObject(id: r.id, name: r.name, mesh: r.mesh, material: r.material)
+            o.modifiers = r.modifiers ?? []
+            o.light = r.light
             if let t = r.material.texture { o.textureImage = UIImage(contentsOfFile: dir.appendingPathComponent("textures").appendingPathComponent(t).path) }
             r.transform.apply(to: o.node)
             o.hidden = r.hidden; o.node.isHidden = r.hidden
+            if o.light != nil { m.configureLight(o) }
             m.add(o, select: false)
         }
         m.dirty = false
@@ -103,6 +107,7 @@ extension StudioModel {
                 o.node.removeFromParentNode()
             } else {
                 o.node.removeFromParentNode()
+                o.node.childNodes.filter { $0.name == "light-gizmo" }.forEach { $0.removeFromParentNode() }
                 o.node.name = o.name
                 o.node.opacity = 1
                 scene.rootNode.addChildNode(o.node)
@@ -121,6 +126,9 @@ extension StudioModel {
         let overlayParent = overlay.parent; overlay.removeFromParentNode()
         let hidden = objects.filter { $0.hidden }
         hidden.forEach { $0.node.removeFromParentNode() }
+        var markers: [(SCNNode, SCNNode)] = []
+        for o in objects where o.isLight { for c in o.node.childNodes where c.name == "light-gizmo" { markers.append((c, o.node)); c.removeFromParentNode() } }
+        defer { for (c, p) in markers { p.addChildNode(c) } }
         let bg = scene.background.contents; scene.background.contents = nil
         let result = body(scene)
         scene.background.contents = bg

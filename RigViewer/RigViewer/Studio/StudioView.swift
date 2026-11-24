@@ -1,19 +1,28 @@
 import SwiftUI
 import SceneKit
 
+enum ObjectCategory: String, CaseIterable, Identifiable { case transform = "Transform", object = "Object", modify = "Modify"; var id: String { rawValue } }
+enum EditCategory: String, CaseIterable, Identifiable { case select = "Select", mesh = "Mesh", faces = "Faces", edges = "Edges", normals = "Normals & UV"; var id: String { rawValue } }
+
 struct StudioView: View {
     @ObservedObject var model: StudioModel
     /// Called when the person taps Done: hands the result to the viewer.
     var onDone: (StudioModel) -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var showProperties = false
+    @State private var propertiesTab: PropertiesTab = .object
     @State private var showOutliner = false
     @State private var showExport = false
     @State private var showBones = false
+    @State private var showAdd = false
+    @State private var showRender = false
     @State private var renaming = false
     @State private var newName = ""
     @State private var savingAnimation = false
     @State private var animationName = ""
+    @State private var objectCategory: ObjectCategory = .transform
+    @State private var editCategory: EditCategory = .select
+    @State private var lastOpOpen = true
 
     var body: some View {
         ZStack {
@@ -26,6 +35,7 @@ struct StudioView: View {
                 topBar
                 hint
                 Spacer(minLength: 0)
+                if let op = model.lastOp { lastOpPanel(op) }
                 bottomArea
             }
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
@@ -38,11 +48,20 @@ struct StudioView: View {
                 }
                 .transition(.move(edge: .top).combined(with: .opacity)).allowsHitTesting(false)
             }
+            if let b = model.busy {
+                VStack(spacing: 12) { ProgressView().controlSize(.large); Text(b).font(.subheadline.weight(.semibold)) }
+                    .padding(26).glass(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
+            shortcuts
         }
-        .sheet(isPresented: $showProperties) { StudioPropertiesView(model: model).presentationDetents([.medium, .large]).presentationBackgroundInteraction(.enabled(upThrough: .medium)) }
+        .sheet(isPresented: $showProperties) {
+            StudioPropertiesView(model: model, tab: $propertiesTab).presentationDetents([.medium, .large]).presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        }
         .sheet(isPresented: $showOutliner) { StudioOutlinerView(model: model).presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showExport) { StudioExportView(model: model).presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showBones) { BonePickerView(model: model).presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $showAdd) { AddObjectSheet(model: model).presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $showRender) { RenderSheet(model: model).presentationDetents([.large]) }
         .alert("Rename Model", isPresented: $renaming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) {}
@@ -53,6 +72,46 @@ struct StudioView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { _ = model.saveAnimation(name: animationName) }
         } message: { Text("It will appear in the viewer's animation list when you tap Done.") }
+    }
+
+    private func openProperties(_ tab: PropertiesTab) { propertiesTab = tab; showProperties = true }
+
+    // MARK: keyboard shortcuts (iPad / Mac keyboards), Blender-style
+
+    private var shortcuts: some View {
+        ZStack {
+            Group {
+                Button("") { model.gizmoKind = .move }.keyboardShortcut("g", modifiers: [])
+                Button("") { model.gizmoKind = .rotate }.keyboardShortcut("r", modifiers: [])
+                Button("") { model.gizmoKind = .scale }.keyboardShortcut("s", modifiers: [])
+                Button("") { model.mode = model.mode == .edit ? .object : .edit }.keyboardShortcut(.tab, modifiers: [])
+                Button("") { if model.mode == .edit { model.deleteEditSelection() } else { model.deleteSelection() } }.keyboardShortcut("x", modifiers: [])
+                Button("") { if model.mode == .edit { model.deleteEditSelection() } else { model.deleteSelection() } }.keyboardShortcut(.delete, modifiers: [])
+                Button("") { model.undo() }.keyboardShortcut("z", modifiers: .command)
+                Button("") { model.redo() }.keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+            Group {
+                Button("") { if model.mode == .edit { model.duplicateEditSelection() } else { model.duplicateSelection() } }.keyboardShortcut("d", modifiers: .shift)
+                Button("") { model.selectAll() }.keyboardShortcut("a", modifiers: [])
+                Button("") { model.selectNone() }.keyboardShortcut("a", modifiers: .option)
+                Button("") { if model.mode == .edit { model.extrude() } }.keyboardShortcut("e", modifiers: [])
+                Button("") { if model.mode == .edit { model.inset() } }.keyboardShortcut("i", modifiers: [])
+                Button("") { if model.mode == .edit { model.loopCut() } }.keyboardShortcut("r", modifiers: .command)
+                Button("") { if model.mode == .edit { model.selectLinked() } }.keyboardShortcut("l", modifiers: [])
+                Button("") { model.selectMode = .vertex }.keyboardShortcut("1", modifiers: [])
+            }
+            Group {
+                Button("") { model.selectMode = .edge }.keyboardShortcut("2", modifiers: [])
+                Button("") { model.selectMode = .face }.keyboardShortcut("3", modifiers: [])
+                Button("") { model.focusSelection() }.keyboardShortcut("f", modifiers: [])
+                Button("") { showAdd = true }.keyboardShortcut("a", modifiers: .shift)
+                Button("") { openProperties(.object) }.keyboardShortcut("n", modifiers: [])
+                Button("") { model.proportional.toggle() }.keyboardShortcut("o", modifiers: [])
+                Button("") { showRender = true }.keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("") { model.xray.toggle() }.keyboardShortcut("z", modifiers: .option)
+            }
+        }
+        .opacity(0).frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
     }
 
     // MARK: top bar
@@ -69,6 +128,7 @@ struct StudioView: View {
                     Button("Rename", systemImage: "pencil") { newName = model.projectName; renaming = true }
                     Button("Save Project", systemImage: "square.and.arrow.down") { model.saveProject(); model.showToast(model.hasSavableContent ? "Saved" : "Add a shape to save a project") }
                     Button("Outliner", systemImage: "list.bullet.indent") { showOutliner = true }
+                    Button("Scene & World", systemImage: "globe") { openProperties(.world) }
                     Divider()
                     Toggle(isOn: $model.showGrid) { Label("Grid", systemImage: "grid") }
                     Toggle(isOn: $model.snapping) { Label("Snapping", systemImage: "ruler") }
@@ -84,6 +144,17 @@ struct StudioView: View {
 
                 circle("arrow.uturn.backward", enabled: model.canUndo) { model.undo() }.accessibilityLabel("Undo")
                 circle("arrow.uturn.forward", enabled: model.canRedo) { model.redo() }.accessibilityLabel("Redo")
+                Menu {
+                    Picker("Shading", selection: $model.shading) {
+                        ForEach(ViewShading.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
+                    }
+                    Toggle(isOn: $model.xray) { Label("X-Ray", systemImage: "eye.trianglebadge.exclamationmark") }
+                    Toggle(isOn: $model.showGrid) { Label("Grid & Floor", systemImage: "grid") }
+                } label: {
+                    Image(systemName: model.shading.icon).font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).contentShape(Circle())
+                }
+                .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Viewport shading")
+                circle("camera.aperture") { showRender = true }.accessibilityLabel("Render")
                 Button { showExport = true } label: {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44)
                 }
@@ -114,7 +185,8 @@ struct StudioView: View {
             case .object: return model.selection.isEmpty ? "Tap a shape to select it · drag empty space to orbit" : nil
             case .edit: return model.editVertices.isEmpty ? "Tap \(model.selectMode.rawValue.lowercased())s to select them" : nil
             case .sculpt: return "Drag on the shape to sculpt · two fingers to move the view"
-            case .pose: return model.selectedBone == nil ? "Tap a joint (dot) to pose it" : nil
+            case .paint: return "Drag on the shape to paint · two fingers to move the view"
+            case .pose: return model.selectedBone == nil ? "Tap a dot to choose what to animate" : nil
             }
         }()
         if let text {
@@ -122,6 +194,38 @@ struct StudioView: View {
                 .padding(.horizontal, 14).padding(.vertical, 7).background(.ultraThinMaterial, in: Capsule())
                 .transition(.opacity)
         }
+    }
+
+    // MARK: adjust last operation
+
+    private func lastOpPanel(_ op: LastOperation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { withAnimation(.snappy) { lastOpOpen.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.below.rectangle").font(.footnote.weight(.semibold))
+                    Text(op.title).font(.footnote.weight(.semibold))
+                    Spacer()
+                    Image(systemName: lastOpOpen ? "chevron.down" : "chevron.up").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                    Button { model.lastOp = nil } label: { Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 26, height: 26) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .buttonStyle(.plain)
+            if lastOpOpen {
+                ForEach(Array(op.params.enumerated()), id: \.offset) { i, p in
+                    HStack(spacing: 10) {
+                        Text(p.name).font(.caption).frame(width: 92, alignment: .leading).lineLimit(1)
+                        Slider(value: Binding(get: { op.params[i].value }, set: { model.adjustLastOp(i, $0) }), in: p.range)
+                        Text(p.step != nil ? String(format: "%.0f", p.value) : String(format: "%.3f", p.value))
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: 520)
+        .glass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: bottom: tools + mode switcher
@@ -133,6 +237,7 @@ struct StudioView: View {
                 case .object: objectTools
                 case .edit: editTools
                 case .sculpt: sculptTools
+                case .paint: paintTools
                 case .pose: poseTools
                 }
             }
@@ -150,7 +255,7 @@ struct StudioView: View {
                 Button { withAnimation(.snappy) { model.mode = m }; Haptics.select() } label: {
                     VStack(spacing: 2) {
                         Image(systemName: m.icon).font(.system(size: 16, weight: .semibold))
-                        Text(m.rawValue).font(.caption2.weight(.semibold))
+                        Text(m.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .foregroundStyle(on ? Color.white : Color.primary)
@@ -164,27 +269,97 @@ struct StudioView: View {
         .glass(Capsule())
     }
 
+    private func chips<T: Hashable & Identifiable & RawRepresentable>(_ all: [T], _ sel: Binding<T>) -> some View where T.RawValue == String {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(all) { c in
+                    let on = sel.wrappedValue == c
+                    Button { withAnimation(.snappy) { sel.wrappedValue = c }; Haptics.select() } label: {
+                        Text(c.rawValue).font(.caption.weight(.semibold)).padding(.horizontal, 12).frame(height: 28)
+                            .foregroundStyle(on ? Color.white : Color.primary)
+                            .background(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.07)), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
     // MARK: object tools
 
     private var objectTools: some View {
-        ToolStrip {
-            Menu {
-                ForEach(Primitive.allCases) { p in Button(p.rawValue, systemImage: p.icon) { model.addPrimitive(p) } }
-            } label: { ToolLabel(icon: "plus", title: "Add", tint: .accentColor) }
-            GizmoPicker(model: model)
-            ToolButton(icon: "checkmark.circle", title: "Multi", on: model.multiSelect) { model.multiSelect.toggle() }
-            ToolButton(icon: "slider.horizontal.3", title: "Properties", enabled: !model.selection.isEmpty) { showProperties = true }
-            ToolButton(icon: "plus.square.on.square", title: "Duplicate", enabled: !model.selection.isEmpty) { model.duplicateSelection() }
-            ToolButton(icon: "trash", title: "Delete", enabled: !model.selection.isEmpty, destructive: true) { model.deleteSelection() }
-            ToolButton(icon: "link", title: "Join", enabled: model.selection.count > 1) { model.joinSelection() }
-            ToolButton(icon: "checkmark.seal", title: "Apply", enabled: model.primary?.mesh != nil) { model.applyTransform() }
-            if model.primary?.isImported == true {
-                ToolButton(icon: "wand.and.stars", title: "Make Editable") { if let p = model.primary { model.convertToEditable(p) } }
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button { showAdd = true } label: {
+                    Label("Add", systemImage: "plus").font(.footnote.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 30).background(Color.accentColor, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                chips(ObjectCategory.allCases, $objectCategory)
             }
-            ToolButton(icon: "scope", title: "Focus") { model.focusSelection() }
-            ToolButton(icon: "list.bullet.indent", title: "Outliner") { showOutliner = true }
-            ToolButton(icon: "ruler", title: "Snap", on: model.snapping) { model.snapping.toggle() }
+            ToolStrip {
+                switch objectCategory {
+                case .transform:
+                    GizmoPicker(model: model)
+                    ToolButton(icon: "checkmark.circle", title: "Multi", on: model.multiSelect) { model.multiSelect.toggle() }
+                    ToolButton(icon: "ruler", title: "Snap", on: model.snapping) { model.snapping.toggle() }
+                    ToolButton(icon: "slider.horizontal.3", title: "Numbers", enabled: !model.selection.isEmpty) { openProperties(.object) }
+                    ToolButton(icon: "arrow.down.to.line", title: "To Floor", enabled: !model.selection.isEmpty) { model.dropToFloor() }
+                    Menu {
+                        Button("Clear Location") { model.resetTransform(rotation: false, scale: false, location: true) }
+                        Button("Clear Rotation") { model.resetTransform(rotation: true, scale: false, location: false) }
+                        Button("Clear Scale") { model.resetTransform(rotation: false, scale: true, location: false) }
+                        Button("Clear All") { model.resetTransform(rotation: true, scale: true, location: true) }
+                    } label: { ToolLabel(icon: "arrow.counterclockwise", title: "Clear") }
+                    .disabled(model.selection.isEmpty)
+                    ToolButton(icon: "checkmark.seal", title: "Apply", enabled: model.primary?.mesh != nil) { model.applyTransform() }
+                    ToolButton(icon: "scope", title: "Focus") { model.focusSelection() }
+                case .object:
+                    ToolButton(icon: "plus.square.on.square", title: "Duplicate", enabled: !model.selection.isEmpty) { model.duplicateSelection() }
+                    ToolButton(icon: "trash", title: "Delete", enabled: !model.selection.isEmpty, destructive: true) { model.deleteSelection() }
+                    ToolButton(icon: "link", title: "Join", enabled: model.selection.count > 1) { model.joinSelection() }
+                    ToolButton(icon: "square.split.2x2", title: "Split Parts", enabled: model.primary?.mesh != nil) { model.separateLooseParts() }
+                    Menu {
+                        Button("Origin to Geometry") { model.setOrigin(.geometry) }
+                        Button("Origin to Base") { model.setOrigin(.base) }
+                        Button("Geometry to Origin") { model.setOrigin(.geometryToOrigin) }
+                    } label: { ToolLabel(icon: "smallcircle.filled.circle", title: "Origin") }
+                    .disabled(model.primary?.mesh == nil)
+                    ToolButton(icon: "circle.fill", title: "Smooth", enabled: model.primary?.mesh != nil) { model.shadeSmooth(true) }
+                    ToolButton(icon: "hexagon", title: "Flat", enabled: model.primary?.mesh != nil) { model.shadeSmooth(false) }
+                    ToolButton(icon: "paintpalette", title: "Material", enabled: model.primary?.mesh != nil) { openProperties(.material) }
+                    if model.primary?.isImported == true {
+                        ToolButton(icon: "wand.and.stars", title: "Make Editable") { if let p = model.primary { model.convertToEditable(p) } }
+                    }
+                    ToolButton(icon: "list.bullet.indent", title: "Outliner") { showOutliner = true }
+                case .modify:
+                    ToolButton(icon: "wrench.and.screwdriver", title: "Modifiers", enabled: model.primary?.mesh != nil) { openProperties(.modifiers) }
+                    Menu {
+                        ForEach(ModifierKind.allCases) { k in Button(k.title, systemImage: k.icon) { model.addModifier(k) } }
+                    } label: { ToolLabel(icon: "plus.rectangle.on.rectangle", title: "Add Modifier") }
+                    .disabled(model.primary?.mesh == nil)
+                    booleanMenu
+                    ToolButton(icon: "cube.transparent", title: "Remesh", enabled: model.primary?.mesh != nil) { model.remeshPrimary() }
+                    ToolButton(icon: "checkmark.rectangle.stack", title: "Apply Mods", enabled: !(model.primary?.modifiers.isEmpty ?? true)) { model.applyAllModifiers() }
+                }
+            }
         }
+    }
+
+    @ViewBuilder private var booleanMenu: some View {
+        let sel = model.selectedObjects.filter { $0.mesh != nil }
+        Menu {
+            if sel.count == 2 {
+                let a = sel[0], b = sel[1]
+                Button("Union", systemImage: BooleanOp.union.icon) { model.boolean(.union, target: a, cutter: b) }
+                Button("\(a.name) minus \(b.name)", systemImage: BooleanOp.difference.icon) { model.boolean(.difference, target: a, cutter: b) }
+                Button("\(b.name) minus \(a.name)", systemImage: BooleanOp.difference.icon) { model.boolean(.difference, target: b, cutter: a) }
+                Button("Intersect", systemImage: BooleanOp.intersect.icon) { model.boolean(.intersect, target: a, cutter: b) }
+            } else {
+                Text("Turn on Multi and select exactly two shapes")
+            }
+        } label: { ToolLabel(icon: "square.on.square.intersection.dashed", title: "Boolean") }
     }
 
     // MARK: edit tools
@@ -198,28 +373,70 @@ struct StudioView: View {
                 .pickerStyle(.segmented).frame(maxWidth: 150)
                 GizmoPicker(model: model, compact: true)
                 Spacer(minLength: 0)
+                SmallToggle(icon: "circle.dotted.circle", on: model.proportional) { model.proportional.toggle() }.accessibilityLabel("Proportional editing")
                 SmallToggle(icon: "checkmark.circle", on: model.multiSelect) { model.multiSelect.toggle() }.accessibilityLabel("Multi-select")
                 SmallToggle(icon: "eye.trianglebadge.exclamationmark", on: model.xray) { model.xray.toggle() }.accessibilityLabel("X-ray")
             }
+            if model.proportional {
+                LabeledSlider(icon: "circle.dotted.circle", value: $model.proportionalRadius, range: 0.05...2)
+            }
+            chips(EditCategory.allCases, $editCategory)
             ToolStrip {
-                ToolButton(icon: "checkmark.square", title: "All") { model.selectAll() }
-                ToolButton(icon: "square", title: "None") { model.selectNone() }
-                ToolButton(icon: "arrow.left.arrow.right.square", title: "Invert") { model.invertSelection() }
-                ToolButton(icon: "square.stack.3d.up.fill", title: "Extrude", tint: .accentColor) { model.extrude() }
-                ToolButton(icon: "square.inset.filled", title: "Inset") { model.inset() }
-                ToolButton(icon: "square.on.square.squareshape.controlhandles", title: "Bevel") { model.bevel() }
-                Menu {
-                    Button("Smooth (Catmull–Clark)", systemImage: "circle.grid.cross") { model.subdivide(smooth: true) }
-                    Button("Simple", systemImage: "square.grid.2x2") { model.subdivide(smooth: false) }
-                } label: { ToolLabel(icon: "square.grid.3x3", title: "Subdivide") }
-                ToolButton(icon: "drop", title: "Smooth") { model.smoothSelection() }
-                ToolButton(icon: "arrow.triangle.merge", title: "Merge") { model.mergeSelection() }
-                ToolButton(icon: "square.dashed", title: "Make Face") { model.makeFace() }
-                ToolButton(icon: "trash", title: "Delete", destructive: true) { model.deleteEditSelection() }
-                ToolButton(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", title: "Mirror X") { model.mirrorX() }
-                ToolButton(icon: "arrow.uturn.up.square", title: "Flip") { model.flipNormals() }
-                ToolButton(icon: "triangle", title: "Triangulate") { model.triangulate() }
-                ToolButton(icon: model.primary?.mesh?.smooth == true ? "circle.fill" : "hexagon", title: model.primary?.mesh?.smooth == true ? "Smooth Shade" : "Flat Shade") { model.toggleSmoothShading() }
+                switch editCategory {
+                case .select:
+                    ToolButton(icon: "checkmark.square", title: "All") { model.selectAll() }
+                    ToolButton(icon: "square", title: "None") { model.selectNone() }
+                    ToolButton(icon: "arrow.left.arrow.right.square", title: "Invert") { model.invertSelection() }
+                    ToolButton(icon: "link", title: "Linked") { model.selectLinked() }
+                    ToolButton(icon: "plus.circle", title: "Grow") { model.growSelection(true) }
+                    ToolButton(icon: "minus.circle", title: "Shrink") { model.growSelection(false) }
+                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Edge Loop") { model.selectEdgeLoop() }
+                    ToolButton(icon: "circle.circle", title: "Edge Ring") { model.selectEdgeLoop(ring: true) }
+                case .mesh:
+                    Group {
+                    ToolButton(icon: "plus.square.on.square", title: "Duplicate") { model.duplicateEditSelection() }
+                    ToolButton(icon: "rectangle.split.2x1", title: "Separate") { model.separateSelection() }
+                    ToolButton(icon: "trash", title: "Delete", destructive: true) { model.deleteEditSelection() }
+                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { model.mergeSelection() }
+                    Menu {
+                        Button("Smooth (Catmull–Clark)", systemImage: "circle.grid.cross") { model.subdivide(smooth: true) }
+                        Button("Simple", systemImage: "square.grid.2x2") { model.subdivide(smooth: false) }
+                    } label: { ToolLabel(icon: "square.grid.3x3", title: "Subdivide") }
+                    ToolButton(icon: "drop", title: "Smooth") { model.smoothSelection() }
+                    Menu {
+                        Button("Mirror X") { model.mirror(axis: 0) }
+                        Button("Mirror Y") { model.mirror(axis: 1) }
+                        Button("Mirror Z") { model.mirror(axis: 2) }
+                    } label: { ToolLabel(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", title: "Mirror") }
+                    }
+                    Group {
+                    ToolButton(icon: "arrow.up.left.and.arrow.down.right", title: "Fatten") { model.shrinkFatten() }
+                    ToolButton(icon: "circle", title: "To Sphere") { model.toSphere() }
+                    ToolButton(icon: "dice", title: "Randomize") { model.randomize() }
+                    ToolButton(icon: "triangle", title: "Triangulate") { model.triangulate() }
+                    ToolButton(icon: "square", title: "Tris → Quads") { model.trisToQuads() }
+                    }
+                case .faces:
+                    ToolButton(icon: "square.stack.3d.up.fill", title: "Extrude", tint: .accentColor) { model.extrude() }
+                    ToolButton(icon: "square.inset.filled", title: "Inset") { model.inset() }
+                    ToolButton(icon: "square.on.square.squareshape.controlhandles", title: "Bevel") { model.bevel() }
+                    ToolButton(icon: "asterisk", title: "Poke") { model.poke() }
+                    ToolButton(icon: "square.dashed", title: "Make Face") { model.makeFace() }
+                    ToolButton(icon: "square.dashed.inset.filled", title: "Dissolve") { model.dissolve() }
+                case .edges:
+                    ToolButton(icon: "scissors", title: "Loop Cut", tint: .accentColor) { model.loopCut() }
+                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Select Loop") { model.selectEdgeLoop() }
+                    ToolButton(icon: "circle.circle", title: "Select Ring") { model.selectEdgeLoop(ring: true) }
+                    ToolButton(icon: "line.diagonal", title: "Dissolve") { if model.selectMode != .edge { model.selectMode = .edge }; model.dissolve() }
+                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { model.mergeSelection() }
+                case .normals:
+                    ToolButton(icon: "arrow.uturn.up.square", title: "Flip") { model.flipNormals() }
+                    ToolButton(icon: "arrow.up.and.down.square", title: "Recalculate") { model.recalculateNormals() }
+                    ToolButton(icon: model.primary?.mesh?.smooth == true ? "circle.fill" : "hexagon", title: model.primary?.mesh?.smooth == true ? "Smooth Shade" : "Flat Shade") { model.toggleSmoothShading() }
+                    ForEach(UVProjection.allCases) { p in
+                        ToolButton(icon: p.icon, title: "UV \(p.rawValue)") { model.projectUVs(p) }
+                    }
+                }
             }
         }
     }
@@ -254,13 +471,65 @@ struct StudioView: View {
                 SmallToggle(icon: "minus.circle", title: "Invert", on: model.brushInvert) { model.brushInvert.toggle() }
                 SmallToggle(icon: "arrow.left.and.right", title: "Mirror X", on: model.symmetryX) { model.symmetryX.toggle() }
                 Spacer(minLength: 0)
-                Button { model.addDetail() } label: { Label("Add Detail", systemImage: "plus.magnifyingglass").font(.footnote.weight(.semibold)) }
-                    .buttonStyle(.plain).padding(.horizontal, 12).frame(height: 34).background(Color.primary.opacity(0.08), in: Capsule())
+                Menu {
+                    Button("Add Detail (Subdivide)", systemImage: "plus.magnifyingglass") { model.addDetail() }
+                    Section("Voxel Remesh") {
+                        ForEach([32, 48, 64, 96, 128, 160], id: \.self) { r in
+                            Button("Resolution \(r)") { model.remeshResolution = Double(r); model.remeshPrimary() }
+                        }
+                    }
+                } label: {
+                    Label("Detail", systemImage: "cube.transparent").font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12).frame(height: 34).background(Color.primary.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: pose tools
+    // MARK: paint tools
+
+    private var paintTools: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                ColorPicker("", selection: $model.paintColor, supportsOpacity: false).labelsHidden().frame(width: 36)
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(Self.swatches.enumerated()), id: \.offset) { _, c in
+                            Circle().fill(c).frame(width: 28, height: 28)
+                                .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 1))
+                                .onTapGesture { model.paintColor = c; Haptics.select() }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+            HStack(spacing: 14) {
+                LabeledSlider(icon: "circle.dashed", value: $model.brushRadius, range: 0.02...0.6)
+                LabeledSlider(icon: "drop.fill", value: $model.brushStrength, range: 0.05...1)
+            }
+            HStack(spacing: 8) {
+                SmallToggle(icon: "aqi.medium", title: "Blur", on: model.paintBlur) { model.paintBlur.toggle() }
+                SmallToggle(icon: "arrow.left.and.right", title: "Mirror X", on: model.symmetryX) { model.symmetryX.toggle() }
+                Spacer(minLength: 0)
+                Menu {
+                    Button("Fill with Colour", systemImage: "paintbrush.fill") { model.fillPaint() }
+                    Button("Gradient", systemImage: "square.fill.and.line.vertical.and.square") { model.gradientPaint() }
+                    Button("Clear Paint", systemImage: "eraser", role: .destructive) { model.clearPaint() }
+                    Button("Add Detail", systemImage: "plus.magnifyingglass") { model.addDetail() }
+                } label: {
+                    Label("Fill", systemImage: "paintbrush.fill").font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12).frame(height: 34).background(Color.primary.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    static let swatches: [Color] = [.white, .black, Color(white: 0.5), .red, .orange, .yellow, .green, .mint, .teal, .cyan, .blue, .indigo, .purple, .pink, .brown,
+                                    Color(red: 0.96, green: 0.8, blue: 0.69), Color(red: 0.55, green: 0.36, blue: 0.24)]
+
+    // MARK: pose / animate tools
 
     private var poseTools: some View {
         VStack(spacing: 10) {
@@ -268,7 +537,7 @@ struct StudioView: View {
                 Button { showBones = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "figure.stand").font(.footnote.weight(.semibold))
-                        Text(model.selectedBone?.name ?? "Choose Bone").font(.footnote.weight(.semibold)).lineLimit(1)
+                        Text(model.selectedBone?.name ?? "Choose Part").font(.footnote.weight(.semibold)).lineLimit(1)
                         Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 12).frame(height: 34).frame(maxWidth: .infinity, alignment: .leading)
@@ -281,8 +550,8 @@ struct StudioView: View {
                 }
                 .pickerStyle(.segmented).frame(width: 96)
                 Menu {
-                    Button("Reset Bone", systemImage: "arrow.counterclockwise") { model.resetBone() }.disabled(model.selectedBone == nil)
-                    Button("Reset Whole Pose", systemImage: "figure.stand") { model.resetPose() }
+                    Button("Reset Selected", systemImage: "arrow.counterclockwise") { model.resetBone() }.disabled(model.selectedBone == nil)
+                    Button("Reset All", systemImage: "figure.stand") { model.resetPose() }
                     Button("Mirror Pose", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right") { model.mirrorPose() }
                 } label: { Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 34, height: 34).background(Color.primary.opacity(0.08), in: Circle()) }
             }
@@ -293,7 +562,7 @@ struct StudioView: View {
                 Button { model.deleteKey() } label: { Image(systemName: "diamond.slash") .font(.footnote.weight(.semibold)).frame(width: 34, height: 34) }
                     .buttonStyle(.plain).background(Color.primary.opacity(0.08), in: Circle()).disabled(model.keys.isEmpty)
                 Menu {
-                    ForEach([1.0, 2.0, 3.0, 5.0, 10.0], id: \.self) { d in Button("\(Int(d)) seconds") { model.poseDuration = d; if model.poseTime > d { model.poseTime = d } } }
+                    ForEach([1.0, 2.0, 3.0, 5.0, 10.0, 20.0], id: \.self) { d in Button("\(Int(d)) seconds") { model.poseDuration = d; if model.poseTime > d { model.poseTime = d } } }
                 } label: { Text("\(Int(model.poseDuration)) s").font(.footnote.weight(.semibold)).monospacedDigit().padding(.horizontal, 12).frame(height: 34).background(Color.primary.opacity(0.08), in: Capsule()) }
                 SmallToggle(icon: "repeat", on: model.loopPose) { model.loopPose.toggle() }
                 Spacer(minLength: 0)

@@ -2,99 +2,7 @@ import SwiftUI
 import PhotosUI
 import SceneKit
 
-// MARK: - Properties (transform, material, mesh info)
-
-struct StudioPropertiesView: View {
-    @ObservedObject var model: StudioModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var photo: PhotosPickerItem?
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let o = model.primary {
-                    Form {
-                        Section("Object") {
-                            TextField("Name", text: Binding(get: { o.name }, set: { model.rename(o, $0) }))
-                            if let m = o.mesh {
-                                LabeledContent("Vertices", value: "\(m.vertexCount)")
-                                LabeledContent("Faces", value: "\(m.faceCount)")
-                                LabeledContent("Triangles", value: Fmt.count(m.triangleCount))
-                            } else {
-                                Text("Imported model. Use Make Editable to turn its static meshes into shapes, or Pose to animate its rig.")
-                                    .font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
-                        Section("Transform") {
-                            VectorRow(title: "Position", value: o.node.simdPosition, step: 0.1) { model.pushUndo(); model.setTransform(position: $0) }
-                            VectorRow(title: "Rotation°", value: o.node.simdEulerAngles * (180 / .pi), step: 15) { model.pushUndo(); model.setTransform(rotationDegrees: $0) }
-                            VectorRow(title: "Scale", value: o.node.simdScale, step: 0.1) { model.pushUndo(); model.setTransform(scale: $0) }
-                        }
-                        if o.mesh != nil { materialSections(o) }
-                    }
-                    .id(model.revision)
-                } else {
-                    ContentUnavailableView("Nothing Selected", systemImage: "cube.transparent", description: Text("Tap a shape to see its properties."))
-                }
-            }
-            .navigationTitle("Properties").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
-        }
-        .onChange(of: photo) { _, item in
-            guard let item, let o = model.primary else { return }
-            Task { @MainActor in
-                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
-                    model.pushUndo(); o.textureImage = img; model.applyMaterial(o)
-                }
-                photo = nil
-            }
-        }
-    }
-
-    @ViewBuilder private func materialSections(_ o: StudioObject) -> some View {
-        Section("Material") {
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
-                    ForEach(MaterialRecord.presets, id: \.0) { name, rec in
-                        Button { model.pushUndo(); o.material = rec; model.applyMaterial(o) } label: {
-                            VStack(spacing: 4) {
-                                Circle().fill(RadialGradient(colors: [Color(red: Double(min(1, rec.r + 0.25)), green: Double(min(1, rec.g + 0.25)), blue: Double(min(1, rec.b + 0.25))),
-                                                                      Color(red: Double(rec.r * 0.55), green: Double(rec.g * 0.55), blue: Double(rec.b * 0.55))],
-                                                             center: .init(x: 0.35, y: 0.3), startRadius: 1, endRadius: 26))
-                                    .opacity(Double(max(rec.opacity, 0.45)))
-                                    .frame(width: 44, height: 44)
-                                    .overlay(Circle().stroke(o.material == rec ? Color.accentColor : .clear, lineWidth: 2.5).padding(-3))
-                                Text(name).font(.caption2).foregroundStyle(.secondary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
-            .scrollIndicators(.hidden)
-            ColorPicker("Colour", selection: Binding(get: { o.material.color }, set: { o.material.color = $0; model.applyMaterial(o) }), supportsOpacity: false)
-            MaterialSlider(title: "Roughness", value: Binding(get: { o.material.roughness }, set: { o.material.roughness = $0; model.applyMaterial(o) }))
-            MaterialSlider(title: "Metallic", value: Binding(get: { o.material.metalness }, set: { o.material.metalness = $0; model.applyMaterial(o) }))
-            MaterialSlider(title: "Glow", value: Binding(get: { o.material.emission / 3 }, set: { o.material.emission = $0 * 3; model.applyMaterial(o) }))
-            MaterialSlider(title: "Opacity", value: Binding(get: { o.material.opacity }, set: { o.material.opacity = max(0.05, $0); model.applyMaterial(o) }))
-            Toggle("Double-Sided", isOn: Binding(get: { o.material.doubleSided }, set: { o.material.doubleSided = $0; model.applyMaterial(o) }))
-        }
-        Section {
-            PhotosPicker(selection: $photo, matching: .images) {
-                Label(o.textureImage == nil ? "Add Texture from Photos" : "Replace Texture", systemImage: "photo.on.rectangle")
-            }
-            if let img = o.textureImage {
-                HStack {
-                    Image(uiImage: img).resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 10))
-                    Text("\(Int(img.size.width * img.scale))×\(Int(img.size.height * img.scale))").foregroundStyle(.secondary).monospacedDigit()
-                    Spacer()
-                    Button("Remove", role: .destructive) { model.pushUndo(); o.textureImage = nil; model.applyMaterial(o) }
-                }
-            }
-        } header: { Text("Texture") } footer: { Text("Textures wrap around the shape using automatic box mapping.") }
-    }
-}
+// (Properties moved to StudioProperties.swift)
 
 struct MaterialSlider: View {
     let title: String
@@ -161,13 +69,13 @@ struct StudioOutlinerView: View {
                 }
                 ForEach(model.objects) { o in
                     HStack(spacing: 12) {
-                        Image(systemName: o.isImported ? "figure.stand" : "cube.fill")
+                        Image(systemName: o.light.map { $0.kind.icon } ?? (o.isImported ? "figure.stand" : "cube.fill"))
                             .foregroundStyle(.white).font(.footnote.weight(.semibold))
                             .frame(width: 30, height: 30)
-                            .background((o.isImported ? Color.orange : Color(red: Double(o.material.r), green: Double(o.material.g), blue: Double(o.material.b))).gradient, in: RoundedRectangle(cornerRadius: 8))
+                            .background((o.isLight ? Color.yellow : o.isImported ? Color.orange : Color(red: Double(o.material.r), green: Double(o.material.g), blue: Double(o.material.b))).gradient, in: RoundedRectangle(cornerRadius: 8))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(o.name).font(.body.weight(model.selection.contains(o.id) ? .semibold : .regular))
-                            Text(o.mesh.map { "\(Fmt.count($0.triangleCount)) tris" } ?? "Imported model").font(.caption).foregroundStyle(.secondary)
+                            Text(o.light.map { "\($0.kind.rawValue) light" } ?? o.mesh.map { "\(Fmt.count($0.triangleCount)) tris" + (o.modifiers.isEmpty ? "" : " · \(o.modifiers.count) modifiers") } ?? "Imported model").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button { model.setHidden(o, !o.hidden) } label: {

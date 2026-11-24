@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showStudio = false
     @State private var studio: StudioModel?
+    @State private var pendingStudio: StudioModel?
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
@@ -84,14 +85,18 @@ struct ContentView: View {
         }
         .tint(accent)
         .preferredColorScheme(settings.colorScheme)
-        .fullScreenCover(isPresented: $showLibrary) {
+        .fullScreenCover(isPresented: $showLibrary, onDismiss: {
+            // Present Studio only once the library has fully gone, otherwise UIKit ignores the second cover.
+            if let s = pendingStudio { pendingStudio = nil; studio = s; showStudio = true }
+        }) {
             LibraryView(model: model, isPresented: $showLibrary,
-                        onNewModel: { showLibrary = false; startStudio(StudioModel()) },
-                        onOpenProject: { id in if let s = StudioModel.open(projectID: id) { showLibrary = false; startStudio(s) } })
+                        onNewModel: { pendingStudio = StudioModel(); showLibrary = false },
+                        onOpenProject: { id in if let s = StudioModel.open(projectID: id) { pendingStudio = s; showLibrary = false } })
                 .tint(accent).preferredColorScheme(settings.colorScheme)
         }
         .fullScreenCover(isPresented: $showStudio) {
             if let studio { StudioView(model: studio, onDone: finishStudio).tint(accent).preferredColorScheme(settings.colorScheme) }
+            else { ProgressView().onAppear { showStudio = false } }
         }
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
@@ -101,8 +106,7 @@ struct ContentView: View {
     // MARK: Studio
 
     private func startStudio(_ s: StudioModel) {
-        studio = s
-        Task { @MainActor in try? await Task.sleep(nanoseconds: 350_000_000); showStudio = true }
+        if showLibrary { pendingStudio = s; showLibrary = false } else { studio = s; showStudio = true }
     }
 
     /// Moves the current model into Studio for posing, animating or editing.
