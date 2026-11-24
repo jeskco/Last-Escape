@@ -143,14 +143,16 @@ final class WorldRenderer {
             pr.wrapS = .repeat; pr.wrapT = .repeat; pr.mipFilter = .linear; pr.maxAnisotropy = 8
             return pr
         }
-        var splat: Any = UIColor.green
-        if let device, let url = Res.url("splat.png", "World"),
-           let t = try? MTKTextureLoader(device: device).newTexture(URL: url, options: [.SRGB: false, .generateMipmaps: false]) {
-            splat = t
+        func linear(_ name: String) -> SCNMaterialProperty {
+            var c: Any = UIColor.black
+            if let device, let url = Res.url(name, "World"),
+               let t = try? MTKTextureLoader(device: device).newTexture(URL: url, options: [.SRGB: false, .generateMipmaps: false]) { c = t }
+            let sp = SCNMaterialProperty(contents: c)
+            sp.wrapS = .clamp; sp.wrapT = .clamp
+            return sp
         }
-        let sp = SCNMaterialProperty(contents: splat)
-        sp.wrapS = .clamp; sp.wrapT = .clamp
-        m.setValue(sp, forKey: "splatTex")
+        m.setValue(linear("splat.png"), forKey: "splatTex")
+        m.setValue(linear("splat_rock.png"), forKey: "splatRock")
         m.setValue(p("sand_2k.jpg"), forKey: "sandTex")
         m.setValue(p("grass_2k.jpg"), forKey: "grassTex")
         m.setValue(p("desert_2k.jpg"), forKey: "desertTex")
@@ -162,6 +164,7 @@ final class WorldRenderer {
         m.shaderModifiers = [.surface: """
         #pragma arguments
         texture2d<float> splatTex;
+        texture2d<float> splatRock;
         texture2d<float> sandTex;
         texture2d<float> grassTex;
         texture2d<float> desertTex;
@@ -173,7 +176,7 @@ final class WorldRenderer {
         constexpr sampler cs(filter::linear, address::clamp_to_edge);
         float3 wp = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
         float2 suv = float2((wp.x - splatXform.x) * splatXform.z, (wp.z - splatXform.y) * splatXform.w);
-        float4 w = splatTex.sample(cs, suv);
+        float4 w = float4(splatTex.sample(cs, suv).rgb, splatRock.sample(cs, suv).r);
         float rest = max(0.0, 1.0 - w.r - w.g - w.b - w.a);
         float2 t1 = wp.xz / 24.0;
         float2 t2 = wp.xz / 97.0;
