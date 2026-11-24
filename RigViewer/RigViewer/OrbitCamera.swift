@@ -172,7 +172,9 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
 
     @objc private func step(_ l: CADisplayLink) {
         let now = l.timestamp
-        let dt = Float(lastTime == 0 ? 1.0 / 120 : min(max(now - lastTime, 1.0 / 240), 1.0 / 20))
+        var elapsed: Double = 1.0 / 120.0
+        if lastTime != 0 { elapsed = min(max(now - lastTime, 1.0 / 240.0), 1.0 / 20.0) }
+        let dt = Float(elapsed)
         lastTime = now
 
         if touching == 0 {
@@ -180,30 +182,32 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
             if abs(yawVelocity) > 0.0005 || abs(pitchVelocity) > 0.0005 {
                 yaw += yawVelocity * dt
                 pitch = clampPitch(pitch + pitchVelocity * dt)
-                let decay = exp(-4.2 * dt)
+                let decay: Float = expf(-4.2 * dt)
                 yawVelocity *= decay; pitchVelocity *= decay
             }
             if simd_length(panVelocity) > 1e-6 {
                 target += panVelocity * dt
-                panVelocity *= exp(-6 * dt)
+                panVelocity *= expf(-6.0 * dt)
             }
             if autoRotate { yaw -= 0.45 * dt }
         }
 
         // Critically-damped easing: quick while touching (feels direct), softer when gliding to a reset.
         let tau: Float = glide ? 0.16 : (touching > 0 ? 0.035 : 0.06)
-        let a = 1 - exp(-dt / tau)
+        let a: Float = 1.0 - expf(-dt / tau)
         cYaw += (yaw - cYaw) * a
         cPitch += (pitch - cPitch) * a
         // Ease distance in log space so zoom feels even at every scale.
-        cDistance = exp(log(cDistance) + (log(distance) - log(cDistance)) * a)
+        let logC: Float = logf(cDistance), logG: Float = logf(distance)
+        cDistance = expf(logC + (logG - logC) * a)
         cTarget += (target - cTarget) * a
         if glide, abs(yaw - cYaw) < 0.001, abs(distance - cDistance) / distance < 0.001, simd_length(target - cTarget) < modelRadius * 0.001 { glide = false }
         apply()
     }
 
     private func apply() {
-        let dir = SIMD3<Float>(cos(cPitch) * sin(cYaw), sin(cPitch), cos(cPitch) * cos(cYaw))
+        let cp: Float = cosf(cPitch), sp: Float = sinf(cPitch), cy: Float = cosf(cYaw), sy: Float = sinf(cYaw)
+        let dir = SIMD3<Float>(cp * sy, sp, cp * cy)
         node.simdPosition = cTarget + dir * cDistance
         node.simdLook(at: cTarget, up: SIMD3(0, 1, 0), localFront: SIMD3(0, 0, -1))
         if let cam = node.camera {
@@ -221,7 +225,8 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
     private var worldPerPoint: Float {
         let h = Float(view?.bounds.height ?? 844)
         let fov = Float(node.camera?.fieldOfView ?? 38) * .pi / 180
-        return 2 * cDistance * tan(fov / 2) / max(h, 1)
+        let half: Float = tanf(fov / 2)
+        return 2 * cDistance * half / max(h, 1)
     }
 
     private func panDelta(dx: Float, dy: Float) -> SIMD3<Float> {
