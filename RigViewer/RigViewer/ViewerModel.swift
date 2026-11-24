@@ -891,25 +891,32 @@ enum ChannelView: String, CaseIterable, Identifiable {
 private let smartRules: [(id: String, name: String, icon: String, color: Color, words: [String])] = [
     ("weapons", "Weapons", "scope", .red, ["gun", "rifle", "pistol", "weapon", "sword", "knife", "blade", "shield", "bow", "arrow", "ammo", "magazine", "scope", "barrel", "trigger", "muzzle", "grenade", "axe", "spear", "katana", "handgun", "shotgun", "smg"]),
     ("hair", "Hair & Fur", "comb.fill", .brown, ["hair", "beard", "mustache", "moustache", "fur", "bang", "ponytail", "brow", "eyebrow", "lash", "eyelash", "scalp"]),
+    ("accessories", "Accessories", "eyeglasses", .purple, ["glass", "goggle", "hat", "cap", "beanie", "hood", "watch", "ring", "necklace", "earring", "jewel", "bracelet", "chain", "badge", "scarf", "headphone", "headset", "accessor", "earring", "eyeglass", "sunglass"]),
     ("face", "Head & Face", "face.smiling", .pink, ["head", "face", "eye", "iris", "pupil", "cornea", "teeth", "tooth", "tongue", "mouth", "jaw", "ear", "nose", "lip", "cheek", "skull", "eyelayer"]),
     ("armor", "Armour & Gear", "shield.lefthalf.filled", .indigo, ["armor", "armour", "helmet", "visor", "plate", "pad", "kneepad", "elbowpad", "strap", "holster", "backpack", "bag", "pouch", "harness", "gear", "tactical", "mask", "respirator"]),
-    ("accessories", "Accessories", "eyeglasses", .purple, ["glass", "goggle", "hat", "cap", "beanie", "hood", "watch", "ring", "necklace", "earring", "jewel", "bracelet", "chain", "badge", "scarf", "headphone", "accessor", "pin", "tie"]),
     ("clothing", "Clothing", "tshirt.fill", .blue, ["cloth", "shirt", "tshirt", "pant", "trouser", "jean", "short", "jacket", "coat", "hoodie", "sweater", "vest", "top", "bottom", "dress", "skirt", "suit", "uniform", "shoe", "boot", "sneaker", "sock", "glove", "belt", "outfit", "sleeve", "collar", "cape", "robe"]),
-    ("body", "Body", "figure.stand", .orange, ["body", "skin", "torso", "chest", "arm", "leg", "hand", "finger", "foot", "feet", "toe", "neck", "hip", "spine", "shoulder", "base", "naked", "nude", "mesh_body", "geo_body"]),
+    ("body", "Body", "figure.stand", .orange, ["body", "skin", "torso", "chest", "arm", "leg", "hand", "finger", "foot", "feet", "toe", "neck", "hip", "spine", "shoulder", "naked", "nude", "limb", "thigh", "calf", "knee", "elbow", "wrist", "palm", "abdomen", "belly", "butt", "pelvis", "genesis", "character"]),
     ("vehicle", "Vehicle", "car.fill", .teal, ["wheel", "tire", "tyre", "car", "door", "window", "windshield", "engine", "chassis", "hull", "wing", "seat", "steering"]),
     ("environment", "Environment", "tree.fill", .green, ["ground", "floor", "terrain", "grass", "tree", "leaf", "leaves", "rock", "stone", "wall", "building", "roof", "plant", "water", "sky"]),
 ]
 
 extension ViewerModel {
 
-    private static func tokens(_ s: String) -> String {
-        // Split camelCase and separators so "CPD_EyeLayer" -> "cpd eye layer" but keep the raw lowercase too.
-        var out = ""
-        for (i, ch) in s.enumerated() {
-            if ch.isUppercase, i > 0 { out.append(" ") }
-            out.append(ch.isLetter || ch.isNumber ? Character(ch.lowercased()) : " ")
+    /// Splits names into lowercase words: "CPD_EyeLayer" -> ["cpd", "eye", "layer"], "mesh-body2" -> ["mesh", "body"].
+    private static func words(_ s: String) -> [String] {
+        var out: [String] = []; var cur = ""
+        var prevLower = false
+        for ch in s {
+            if ch.isLetter {
+                if ch.isUppercase && prevLower { out.append(cur); cur = "" }
+                cur.append(Character(ch.lowercased())); prevLower = ch.isLowercase
+            } else {
+                if !cur.isEmpty { out.append(cur); cur = "" }
+                prevLower = false
+            }
         }
-        return " " + out + " " + s.lowercased() + " "
+        if !cur.isEmpty { out.append(cur) }
+        return out.filter { $0.count > 1 }
     }
 
     fileprivate func collectParts() {
@@ -947,8 +954,13 @@ extension ViewerModel {
         case .smart:
             var buckets: [String: [PartInfo]] = [:]
             for p in parts {
-                let text = Self.tokens(p.name) + Self.tokens(p.materialName) + Self.tokens(p.node.parent?.name ?? "")
-                let rule = smartRules.first { r in r.words.contains { w in text.contains(" \(w)") || text.contains("\(w) ") || text.contains("_\(w)") } }
+                // The part's own name decides first; material and parent names break ties for generic names like "Mesh_12".
+                let own = Self.words(p.name)
+                let extra = Self.words(p.materialName) + Self.words(p.node.parent?.name ?? "")
+                func match(_ ws: [String]) -> (id: String, name: String, icon: String, color: Color, words: [String])? {
+                    smartRules.first { r in ws.contains { word in r.words.contains { word.hasPrefix($0) } } }
+                }
+                let rule = match(own) ?? match(extra)
                 buckets[rule?.id ?? "other", default: []].append(p)
             }
             var groups: [PartGroup] = smartRules.compactMap { r in
