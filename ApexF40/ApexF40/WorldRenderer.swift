@@ -252,13 +252,11 @@ final class WorldRenderer {
         for (i, _) in want.prefix(max(0, 4 - pending.count)) {
             pending.insert(i)
             let file = meta.chunks[i].f, mats = materials, det = detailIDs
-            let v = view
             queue.async { [weak self] in
                 guard let url = Res.url(file, "World/chunks"), let data = try? Data(contentsOf: url) else {
                     self?.lock.lock(); self?.ready.append((i, SCNNode(), SCNNode())); self?.lock.unlock(); return
                 }
                 let (b, d) = WorldRenderer.parse(data, materials: mats, detail: det)
-                v?.prepare([b, d], shouldAbortBlock: nil)
                 self?.lock.lock(); self?.ready.append((i, b, d)); self?.lock.unlock()
             }
         }
@@ -292,15 +290,22 @@ final class WorldRenderer {
                 if (fl & 1) != 0 { o += nv * 4 }
                 let idx = Data(bytes: ptr + o, count: ni * (big ? 4 : 2)); o += ni * (big ? 4 : 2)
                 if nv == 0 || ni < 3 { continue }
-                let vs = SCNGeometrySource(data: pos, semantic: .vertex, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: 12)
-                let ns = SCNGeometrySource(data: nrm.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .normal, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: 12)
-                let ts = SCNGeometrySource(data: uv, semantic: .texcoord, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 2, bytesPerComponent: 4, dataOffset: 0, dataStride: 8)
-                let el = SCNGeometryElement(data: idx, primitiveType: .triangles, primitiveCount: ni / 3, bytesPerIndex: big ? 4 : 2)
-                let g = SCNGeometry(sources: [vs, ns, ts], elements: [el])
-                g.materials = [mat < materials.count ? materials[mat] : SCNMaterial()]
-                let node = SCNNode(geometry: g)
-                node.castsShadow = false
-                (detail.contains(mat) ? det : base).addChildNode(node)
+                if ni % 3 != 0 || pos.count != nv * 12 || uv.count != nv * 8 { continue }
+                var node: SCNNode? = nil
+                let err = ApexTryCatch {
+                    let vs = SCNGeometrySource(data: pos, semantic: .vertex, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: 12)
+                    let ns = SCNGeometrySource(data: nrm.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .normal, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: 12)
+                    let ts = SCNGeometrySource(data: uv, semantic: .texcoord, vectorCount: nv, usesFloatComponents: true, componentsPerVector: 2, bytesPerComponent: 4, dataOffset: 0, dataStride: 8)
+                    let el = SCNGeometryElement(data: idx, primitiveType: .triangles, primitiveCount: ni / 3, bytesPerIndex: big ? 4 : 2)
+                    let g = SCNGeometry(sources: [vs, ns, ts], elements: [el])
+                    g.materials = [mat < materials.count ? materials[mat] : SCNMaterial()]
+                    let n = SCNNode(geometry: g)
+                    n.castsShadow = false
+                    node = n
+
+                }
+                if let err { CrashLog.step("mesh skipped (mat \(mat), nv \(nv), ni \(ni)): \(err.name.rawValue) \(err.reason ?? "")"); continue }
+                if let node { (detail.contains(mat) ? det : base).addChildNode(node) }
             }
         }
         return (base, det)

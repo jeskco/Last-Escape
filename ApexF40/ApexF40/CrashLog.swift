@@ -5,6 +5,7 @@ import UIKit
 /// startup steps, so the next launch can show what happened.
 enum CrashLog {
     static let reportURL: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("last_crash.txt")
+    static var wroteException = false
     private static var trail: [String] = []
     private static let lock = NSLock()
     private static var trailText = "" // pre-rendered so the signal handler doesn't allocate much
@@ -29,11 +30,12 @@ enum CrashLog {
     static func install() {
         _ = previousStall
         NSSetUncaughtExceptionHandler { e in
+            CrashLog.wroteException = true
             CrashLog.write("Exception \(e.name.rawValue): \(e.reason ?? "")", stack: e.callStackSymbols)
         }
         for sig in [SIGABRT, SIGILL, SIGSEGV, SIGFPE, SIGBUS, SIGTRAP] {
             signal(sig) { s in
-                CrashLog.write("Signal \(s)", stack: Thread.callStackSymbols)
+                if !CrashLog.wroteException { CrashLog.write("Signal \(s)", stack: Thread.callStackSymbols) }
                 signal(s, SIG_DFL)
                 raise(s)
             }
