@@ -729,7 +729,7 @@ final class StudioModel: ObservableObject {
         switch (kind, h) {
         case (.move, .center):
             var delta = (camRight * Float(t.x) - camUp * Float(t.y)) * wpp
-            if snapping { delta = (delta / 0.1).rounded() * 0.1 }
+            if snapping { delta = (delta / 0.1).rounded(.toNearestOrAwayFromZero) * 0.1 }
             applyMove(delta)
         case (.move, .axis(let i)):
             let along = axisDelta(i, translation: t)

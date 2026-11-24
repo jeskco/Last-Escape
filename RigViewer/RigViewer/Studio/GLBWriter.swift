@@ -3,6 +3,7 @@ import simd
 
 /// Writes static meshes (with PBR materials and base-colour textures) to a binary glTF 2.0 file.
 /// Transforms are baked into the vertices so any engine shows the scene exactly as it looks here.
+@MainActor
 enum GLBWriter {
     static func write(roots: [SCNNode], relativeTo base: SCNNode) -> Data? {
         var bin = Data()
