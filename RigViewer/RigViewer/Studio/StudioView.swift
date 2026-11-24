@@ -34,21 +34,20 @@ struct StudioView: View {
             Aurora(accent: .accentColor, intensity: 0.55, animated: !AppSettings.shared.batterySaver)
             StudioSceneView(model: model).ignoresSafeArea()
 
-            VStack(spacing: 10) {
-                topBar
-                if let r = model.dragReadout {
-                    Text(r).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit()
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .glass(Capsule())
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+            GeometryReader { geo in
+                if geo.size.width > geo.size.height {
+                    landscapeLayout(width: geo.size.width)
                 } else {
-                    hint
+                    VStack(spacing: 10) {
+                        topBar
+                        statusLine
+                        Spacer(minLength: 0)
+                        if let op = model.lastOp { lastOpPanel(op).id(op.title) }
+                        bottomArea
+                    }
+                    .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
                 }
-                Spacer(minLength: 0)
-                if let op = model.lastOp { lastOpPanel(op).id(op.title) }
-                bottomArea
             }
-            .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
             .animation(Theme.spring, value: model.lastOp?.title)
             .animation(Theme.snappy, value: model.dragReadout == nil)
             .animation(Theme.spring, value: model.mode)
@@ -274,25 +273,82 @@ struct StudioView: View {
 
     // MARK: bottom: tools + mode switcher
 
+    private var toolsContent: some View {
+        Group {
+            switch model.mode {
+            case .object: objectTools
+            case .edit: editTools
+            case .sculpt: sculptTools
+            case .paint: paintTools
+            case .pose: poseTools
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .id(model.mode)
+        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+    }
+
     private var bottomArea: some View {
         VStack(spacing: 10) {
-            Group {
-                switch model.mode {
-                case .object: objectTools
-                case .edit: editTools
-                case .sculpt: sculptTools
-                case .paint: paintTools
-                case .pose: poseTools
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity)
-            .id(model.mode)
-            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
-            .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .animation(Theme.spring, value: model.mode)
+            toolsContent
+                .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .animation(Theme.spring, value: model.mode)
             modeSwitcher
         }
+    }
+
+    @ViewBuilder private var statusLine: some View {
+        if let r = model.dragReadout {
+            Text(r).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit()
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .glass(Capsule())
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+        } else {
+            hint
+        }
+    }
+
+    // MARK: landscape — modes on the left, the model in the middle, tools in a sidebar on the right
+
+    private func landscapeLayout(width: CGFloat) -> some View {
+        VStack(spacing: 8) {
+            topBar
+            HStack(alignment: .top, spacing: 10) {
+                modeRail
+                VStack { statusLine; Spacer(minLength: 0) }.frame(maxWidth: .infinity)
+                VStack(spacing: 8) {
+                    if let op = model.lastOp { lastOpPanel(op).id(op.title) }
+                    toolsContent
+                        .environment(\.verticalTools, true)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .glass(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                }
+                .frame(width: min(350, width * 0.38))
+            }
+        }
+        .padding(.horizontal, 10).padding(.top, 2).padding(.bottom, 6)
+    }
+
+    private var modeRail: some View {
+        VStack(spacing: 4) {
+            ForEach(StudioMode.allCases) { m in
+                let on = model.mode == m
+                Button { withAnimation(Theme.snappy) { model.mode = m }; Haptics.select() } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: m.icon).font(.system(size: 16, weight: .semibold))
+                        Text(m.title).font(.system(size: 9, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .frame(width: 60, height: 50)
+                    .foregroundStyle(on ? Color.white : Color.primary)
+                    .background { if on { RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.accentColor.gradient).matchedGeometryEffect(id: "mode", in: modeNS) } }
+                    .contentShape(RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(.pressable(0.92))
+            }
+        }
+        .padding(5)
+        .glass(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private var modeSwitcher: some View {
@@ -625,15 +681,37 @@ struct StudioView: View {
 
 // MARK: - Small building blocks
 
+private struct VerticalToolsKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True in the landscape sidebar: tool strips become grids.
+    var verticalTools: Bool {
+        get { self[VerticalToolsKey.self] }
+        set { self[VerticalToolsKey.self] = newValue }
+    }
+}
+
 struct ToolStrip<Content: View>: View {
     @ViewBuilder var content: () -> Content
+    @Environment(\.verticalTools) private var vertical
     var body: some View {
+        if vertical {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 6)], spacing: 6) { content() }
+                    .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+        } else {
+            strip
+        }
+    }
+    private var strip: some View {
         ScrollView(.horizontal) { HStack(spacing: 6) { content() }.padding(.horizontal, 2) }
             .scrollIndicators(.hidden)
     }
 }
 
 struct ToolLabel: View {
+    @Environment(\.verticalTools) private var vertical
     let icon: String, title: String
     var tint: Color? = nil
     var on = false
@@ -642,10 +720,14 @@ struct ToolLabel: View {
         VStack(spacing: 4) {
             Image(systemName: icon).font(.system(size: 18, weight: .semibold)).frame(height: 24)
                 .foregroundStyle(on ? Color.white : destructive ? Color.red : (tint ?? Color.primary))
-            Text(title).font(.caption2.weight(.semibold)).lineLimit(1).fixedSize().foregroundStyle(on ? Color.white : Color.primary)
+            if vertical {
+                Text(title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.65).foregroundStyle(on ? Color.white : Color.primary)
+            } else {
+                Text(title).font(.caption2.weight(.semibold)).lineLimit(1).fixedSize().foregroundStyle(on ? Color.white : Color.primary)
+            }
         }
-        .padding(.horizontal, 8)
-        .frame(minWidth: 58).frame(height: 58)
+        .padding(.horizontal, vertical ? 4 : 8)
+        .frame(minWidth: 58, maxWidth: vertical ? .infinity : nil).frame(height: 58)
         .background {
             if on { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.accentColor.gradient) }
             else { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.045)) }

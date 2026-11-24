@@ -22,13 +22,12 @@ struct FillImage: View {
     }
 }
 
-/// Home screen: big actions up top, your projects and recent files, samples and formats.
+/// Home screen: big actions up top, your projects and recent files, and samples.
 struct LibraryView: View {
     @ObservedObject var model: ViewerModel
     @Binding var isPresented: Bool
-    var onNewModel: () -> Void = {}
-    var onOpenProject: (String) -> Void = { _ in }
     @State private var showSettings = false
+    @State private var studioSession: StudioSession?
     @State private var projects: [StudioProjectSummary] = []
     @State private var shown = false
     @Environment(\.colorScheme) private var scheme
@@ -53,8 +52,17 @@ struct LibraryView: View {
                     samples.entrance(4, shown: shown)
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 48)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
             .scrollIndicators(.hidden)
+        }
+        .fullScreenCover(item: $studioSession, onDismiss: { withAnimation(Theme.spring) { projects = StudioModel.listProjects() } }) { session in
+            StudioView(model: session.model, savesAsProject: true) {
+                session.model.detach()
+                studioSession = nil
+            }
+            .tint(accent)
         }
         .onAppear {
             projects = StudioModel.listProjects()
@@ -67,17 +75,38 @@ struct LibraryView: View {
     // MARK: header
 
     private var header: some View {
-        HStack(spacing: 14) {
-            GlyphBadge(symbol: "cube.transparent.fill", colors: [accent, accent.blend(.purple, 0.6)], size: 52)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Rig Viewer").font(.system(size: 30, weight: .black, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
-                Text("View · Animate · Create in 3D").font(.subheadline.weight(.medium)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Spacer()
+                roundButton("gearshape.fill") { showSettings = true }.accessibilityLabel("Settings")
+                roundButton("xmark") { isPresented = false }.accessibilityLabel("Close")
             }
-            Spacer(minLength: 8)
-            roundButton("gearshape.fill") { showSettings = true }.accessibilityLabel("Settings")
-            roundButton("xmark") { isPresented = false }.accessibilityLabel("Close")
+            HStack(alignment: .center, spacing: 16) {
+                AppMark(accent: accent, size: 64)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Rig Viewer")
+                        .font(.system(size: 34, weight: .black, design: .rounded))
+                        .foregroundStyle(LinearGradient(colors: [.primary, .primary.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 6) {
+                        tag("View", "eye.fill", .cyan)
+                        tag("Animate", "figure.run", .orange)
+                        tag("Create", "sparkles", .pink)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
         }
-        .padding(.top, 6)
+    }
+
+    private func tag(_ title: String, _ icon: String, _ color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
+            Text(title).font(.caption.weight(.bold)).fixedSize()
+        }
+        .padding(.horizontal, 9).frame(height: 24)
+        .background(color.opacity(0.14), in: Capsule())
+        .overlay(Capsule().strokeBorder(color.opacity(0.3), lineWidth: 1))
     }
 
     private func roundButton(_ icon: String, action: @escaping () -> Void) -> some View {
@@ -94,7 +123,7 @@ struct LibraryView: View {
             actionTile(title: "Open File", subtitle: "FBX, glTF, USDZ, OBJ…", icon: "folder.fill",
                        colors: [accent, accent.blend(.indigo, 0.55)], action: pick)
             actionTile(title: "New Model", subtitle: "Model, sculpt, paint", icon: "sparkles",
-                       colors: [Color.orange, Color.pink], action: onNewModel)
+                       colors: [Color.orange, Color.pink], action: { studioSession = StudioSession(model: StudioModel(), fromLibrary: true) })
         }
     }
 
@@ -129,7 +158,7 @@ struct LibraryView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
                     ForEach(projects) { p in
-                        Button { onOpenProject(p.id) } label: {
+                        Button { if let m = StudioModel.open(projectID: p.id) { studioSession = StudioSession(model: m, fromLibrary: true) } } label: {
                             posterCard(image: p.thumbnail, title: p.name,
                                        detail: "\(p.objectCount) \(p.objectCount == 1 ? "object" : "objects") · \(p.date.formatted(.relative(presentation: .named)))")
                         }
@@ -250,5 +279,34 @@ struct LibraryView: View {
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Theme.stroke(scheme), lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
+    }
+}
+
+/// The app's mark: a glowing gradient tile with a wireframe cube and a little spark.
+struct AppMark: View {
+    let accent: Color
+    var size: CGFloat = 64
+    @State private var glow = false
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(LinearGradient(colors: [accent, accent.blend(.purple, 0.55), accent.blend(.pink, 0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(RadialGradient(colors: [.white.opacity(0.45), .clear], center: .topLeading, startRadius: 0, endRadius: size))
+            Image(systemName: "cube.transparent")
+                .font(.system(size: size * 0.48, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
+            Image(systemName: "sparkle")
+                .font(.system(size: size * 0.2, weight: .black))
+                .foregroundStyle(.white)
+                .offset(x: size * 0.27, y: -size * 0.27)
+                .scaleEffect(glow ? 1.15 : 0.85)
+                .opacity(glow ? 1 : 0.7)
+        }
+        .frame(width: size, height: size)
+        .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 1))
+        .shadow(color: accent.opacity(0.45), radius: glow ? 18 : 10, y: 6)
+        .onAppear { withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { glow = true } }
     }
 }

@@ -195,9 +195,10 @@ final class ViewerModel: ObservableObject {
         observeSettings()
         applyRenderSettings()
         loadRecents()
-        let m = Mannequin.make()
-        install(scene: m.scene, gltfAnimations: [], extraClips: m.clips, url: nil, format: "Built in", name: "Mannequin", bytes: 0)
+        // Start on an empty stage: models only appear when you open one (no placeholder flashing behind windows).
     }
+
+    var hasModel: Bool { !stats.name.isEmpty }
 
     // MARK: - opening files
 

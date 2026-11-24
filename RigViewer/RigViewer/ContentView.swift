@@ -19,8 +19,6 @@ struct ContentView: View {
     @State private var showLibrary = AppSettings.shared.libraryOnLaunch
     @State private var showSettings = false
     @State private var studioSession: StudioSession?
-    @State private var pendingStudio: StudioModel?
-    @State private var returnHome = false
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
@@ -50,7 +48,8 @@ struct ContentView: View {
                         HStack(alignment: .top, spacing: 12) {
                             topBar.frame(maxWidth: 520)
                             Spacer(minLength: 0)
-                            dock(height: geo.size.height, landscape: true).frame(width: 380)
+                            if model.hasModel || model.isLoading { dock(height: geo.size.height, landscape: true).frame(width: 380) }
+                            else { emptyStage.frame(maxWidth: 380).frame(maxHeight: .infinity) }
                         }
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .transition(.opacity)
@@ -58,8 +57,13 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             topBar.padding(.horizontal, 14).padding(.top, 4)
                             Spacer(minLength: 0)
-                            dock(height: liveDockHeight(total: geo.size.height), landscape: false)
-                                .padding(.horizontal, 10).padding(.bottom, 6)
+                            if model.hasModel || model.isLoading {
+                                dock(height: liveDockHeight(total: geo.size.height), landscape: false)
+                                    .padding(.horizontal, 10).padding(.bottom, 6)
+                            } else {
+                                emptyStage.padding(.horizontal, 16).padding(.bottom, 30)
+                                Spacer(minLength: 0)
+                            }
                         }
                         .transition(.opacity)
                     }
@@ -95,21 +99,14 @@ struct ContentView: View {
         }
         .tint(accent)
         .preferredColorScheme(settings.colorScheme)
-        .fullScreenCover(isPresented: $showLibrary, onDismiss: {
-            // Present Studio only once the library has fully gone, otherwise UIKit ignores the second cover.
-            if let s = pendingStudio { pendingStudio = nil; studioSession = StudioSession(model: s, fromLibrary: true) }
-        }) {
-            LibraryView(model: model, isPresented: $showLibrary,
-                        onNewModel: { pendingStudio = StudioModel(); showLibrary = false },
-                        onOpenProject: { id in if let s = StudioModel.open(projectID: id) { pendingStudio = s; showLibrary = false } })
+        .fullScreenCover(isPresented: $showLibrary) {
+            // Studio projects open on top of Home and return to it, so nothing flashes in between.
+            LibraryView(model: model, isPresented: $showLibrary)
                 .tint(accent).preferredColorScheme(settings.colorScheme)
         }
         // item-based so the cover always receives the session it was opened with (an isPresented cover
         // can capture a stale nil on its first presentation, which is why Studio used to need a second tap).
-        .fullScreenCover(item: $studioSession, onDismiss: {
-            // Projects started from Home go back Home when you're done.
-            if returnHome { returnHome = false; showLibrary = true }
-        }) { session in
+        .fullScreenCover(item: $studioSession) { session in
             StudioView(model: session.model, savesAsProject: session.fromLibrary) { finishStudio(session) }
                 .tint(accent).preferredColorScheme(settings.colorScheme)
         }
@@ -121,7 +118,7 @@ struct ContentView: View {
     // MARK: Studio
 
     private func startStudio(_ s: StudioModel) {
-        if showLibrary { pendingStudio = s; showLibrary = false } else { studioSession = StudioSession(model: s, fromLibrary: true) }
+        studioSession = StudioSession(model: s, fromLibrary: true)
     }
 
     /// Moves the current model into Studio for posing, animating or editing.
@@ -129,16 +126,22 @@ struct ContentView: View {
         let lent = model.lendToStudio()
         let s = StudioModel()
         s.importLent(nodes: lent.nodes, name: lent.name.isEmpty ? "Model" : lent.name)
+        // Static models become editable shapes straight away; animated ones keep their rig for Animate
+        // (Object ▸ Make Editable still converts them).
+        if lent.clips.isEmpty, let o = s.objects.first(where: { $0.isImported }) {
+            s.convertToEditable(o, removeEmpty: true)
+        } else {
+            s.showToast("Animated model: pose it in Animate, or Object ▸ Make Editable to edit its meshes")
+        }
         studioSession = StudioSession(model: s, fromLibrary: false)
     }
 
     private func finishStudio(_ session: StudioSession) {
         let s = session.model
         if session.fromLibrary {
-            // Saving (or not) was decided in Studio; go back to Home.
             s.detach()
-            returnHome = true
             studioSession = nil
+            showLibrary = true
             return
         }
         if s.hasSavableContent && s.dirty { s.saveProject() }
@@ -174,8 +177,8 @@ struct ContentView: View {
                 .buttonStyle(.pressable).accessibilityLabel("Library")
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(model.stats.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text(subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
+                    Text(model.hasModel ? model.stats.name : "Rig Viewer").font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(1).truncationMode(.middle)
+                    Text(model.hasModel ? subtitle : "Nothing open").font(.caption2).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
                 }
                 .padding(.horizontal, 16).frame(height: 46).frame(maxWidth: .infinity, alignment: .leading)
                 .glass(Capsule())
@@ -186,6 +189,33 @@ struct ContentView: View {
                 .buttonStyle(.pressable).glass(Circle(), tint: accent, interactive: true).accessibilityLabel("Open file")
             }
         }
+    }
+
+    /// Shown when no model is open.
+    private var emptyStage: some View {
+        VStack(spacing: 16) {
+            AppMark(accent: accent, size: 72)
+            VStack(spacing: 6) {
+                Text("Nothing open yet").font(.system(size: 22, weight: .heavy, design: .rounded))
+                Text("Open a 3D file, try a sample, or start a new model.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            HStack(spacing: 10) {
+                Button { DocumentPicker.present { model.importFiles($0) } } label: {
+                    Label("Open File", systemImage: "folder.fill").font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 18).frame(height: 46).background(accent.gradient, in: Capsule())
+                }
+                .buttonStyle(.pressable)
+                Button { showLibrary = true } label: {
+                    Label("Home", systemImage: "square.grid.2x2.fill").font(.subheadline.weight(.bold))
+                        .padding(.horizontal, 18).frame(height: 46).card(23)
+                }
+                .buttonStyle(.pressable)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: 420)
+        .card(30)
+        .transition(.scale(scale: 0.95).combined(with: .opacity))
     }
 
     private var subtitle: String {

@@ -311,7 +311,7 @@ final class StudioModel: ObservableObject {
     }
 
     /// Turns the static meshes of an imported model into editable Studio shapes (keeps their textures).
-    func convertToEditable(_ o: StudioObject) {
+    func convertToEditable(_ o: StudioObject, removeEmpty: Bool = false) {
         guard o.isImported else { return }
         pushUndo()
         var made = 0, skipped = 0
@@ -339,6 +339,15 @@ final class StudioModel: ObservableObject {
                 made += 1
             }
             n.geometry = nil
+        }
+        if removeEmpty && skipped == 0 {
+            var leftover = false
+            o.node.enumerateHierarchy { n, _ in if n.geometry != nil { leftover = true } }
+            if !leftover {
+                o.node.removeFromParentNode()
+                objects.removeAll { $0.id == o.id }
+                selection = Set(objects.prefix(1).map(\.id))
+            }
         }
         if made > 0 { showToast("Made \(made) editable \(made == 1 ? "shape" : "shapes")" + (skipped > 0 ? " · \(skipped) rigged kept for posing" : "")) }
         else { showToast(skipped > 0 ? "Rigged meshes stay as they are so they can be posed" : "Nothing to convert") }
