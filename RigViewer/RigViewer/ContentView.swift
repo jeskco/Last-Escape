@@ -4,6 +4,12 @@ import SceneKit
 enum InspectorTab: String, CaseIterable, Identifiable {
     case info = "Info", scene = "Scene", clips = "Clips", bones = "Bones", look = "Look", view = "View"
     var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .info: return "info.circle.fill"; case .scene: return "square.stack.3d.up.fill"; case .clips: return "film.stack.fill"
+        case .bones: return "figure.stand"; case .look: return "sun.max.fill"; case .view: return "slider.horizontal.3"
+        }
+    }
 }
 enum Detent: Int { case peek, medium, large }
 
@@ -147,9 +153,9 @@ struct ContentView: View {
         GlassGroup(spacing: 10) {
             HStack(spacing: 10) {
                 Button { showLibrary = true } label: {
-                    Image(systemName: "square.grid.2x2").font(.system(size: 17, weight: .semibold)).frame(width: 46, height: 46).contentShape(Circle())
+                    GlyphBadge(symbol: "square.grid.2x2.fill", colors: [accent, accent.blend(.purple, 0.6)], size: 46)
                 }
-                .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Library")
+                .buttonStyle(.pressable).accessibilityLabel("Library")
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(model.stats.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
@@ -161,7 +167,7 @@ struct ContentView: View {
                 Button { DocumentPicker.present { model.importFiles($0) } } label: {
                     Image(systemName: "plus").font(.system(size: 19, weight: .bold)).foregroundStyle(.white).frame(width: 46, height: 46).contentShape(Circle())
                 }
-                .buttonStyle(.plain).glass(Circle(), tint: accent, interactive: true).accessibilityLabel("Open file")
+                .buttonStyle(.pressable).glass(Circle(), tint: accent, interactive: true).accessibilityLabel("Open file")
             }
         }
     }
@@ -179,8 +185,8 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             header(landscape: landscape)
             if expanded {
-                Picker("Inspector", selection: $tab) { ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) } }
-                    .pickerStyle(.segmented).padding(.horizontal, 12).padding(.bottom, 10)
+                PillTabs(items: InspectorTab.allCases.map { ($0, $0.icon, $0.rawValue) }, selection: $tab)
+                    .padding(.horizontal, 9).padding(.bottom, 8)
                 ScrollView {
                     InspectorContent(model: model, tab: tab, accentIndex: $accentIndex,
                                      onFullScreen: enterFullScreen,
@@ -191,7 +197,8 @@ struct ContentView: View {
                         .padding(.horizontal, 12).padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
-                .transition(.opacity)
+                .id(tab)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .frame(height: landscape ? nil : max(headerHeight, height), alignment: .top)
@@ -282,10 +289,11 @@ struct ContentView: View {
 /// Soft colour field behind the 3D view so the glass has something to refract.
 struct Backdrop: View {
     let accent: Color
-    var style: Int = 0          // 0 gradient, 1 plain, 2 black, 3 white
+    var style: Int = 0          // 0 aurora, 1 plain, 2 black, 3 white, 4 classic gradient
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         switch style {
+        case 0: Aurora(accent: accent, intensity: 0.9, animated: !AppSettings.shared.batterySaver)
         case 1: Color(uiColor: .systemGroupedBackground)
         case 2: Color.black
         case 3: Color.white

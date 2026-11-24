@@ -19,6 +19,7 @@ extension StudioModel {
 
     /// Saves editable shapes (imported models stay in the viewer) plus a thumbnail.
     func saveProject() {
+        settleGoals()
         guard hasSavableContent else { return }
         let fm = FileManager.default
         try? fm.createDirectory(at: projectDir.appendingPathComponent("textures"), withIntermediateDirectories: true)
@@ -91,6 +92,7 @@ extension StudioModel {
 
     /// Hands every visible object to a new scene for the viewer (Studio's helpers are left behind).
     func makeViewerScene() -> SCNScene? {
+        settleGoals()
         let visible = objects.filter { !$0.hidden }
         guard !visible.isEmpty else { return nil }
         overlay.removeFromParentNode()
@@ -139,6 +141,7 @@ extension StudioModel {
     }
 
     func export(_ format: ExportFormat) -> (URL?, String?) {
+        settleGoals()
         let safe = projectName.replacingOccurrences(of: "/", with: "-").trimmingCharacters(in: .whitespaces)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Export-\(UUID().uuidString.prefix(6))", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

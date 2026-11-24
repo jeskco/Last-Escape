@@ -54,17 +54,17 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
-/// An inset grouped section in the style of Settings, drawn inside a glass panel.
+/// A grouped section drawn as a soft card (used across the inspector).
 struct Section2<Content: View>: View {
     var title: String? = nil
     var footer: String? = nil
     @ViewBuilder var content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let title { Text(title).font(.headline).padding(.horizontal, 6) }
+            if let title { SectionTitle(title: title).padding(.horizontal, 8) }
             VStack(spacing: 0) { content() }
-                .background(Color(uiColor: .secondarySystemBackground).opacity(0.62), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            if let footer { Text(footer).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 6) }
+                .card()
+            if let footer { Text(footer).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8).fixedSize(horizontal: false, vertical: true) }
         }
     }
 }
@@ -76,19 +76,19 @@ struct Row<Trailing: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text(label).lineLimit(1)
+                Text(label).lineLimit(1).layoutPriority(1)
                 Spacer(minLength: 8)
                 trailing()
             }
             .padding(.horizontal, 16).frame(minHeight: 48)
-            if showDivider { Divider().padding(.leading, 16) }
+            if showDivider { Divider().opacity(0.6).padding(.leading, 16) }
         }
     }
 }
 
-extension Row where Trailing == Text {
+extension Row where Trailing == AnyView {
     init(_ label: String, value: String, showDivider: Bool = true) {
         self.label = label; self.showDivider = showDivider
-        self.trailing = { Text(value).foregroundStyle(.secondary).monospacedDigit() }
+        self.trailing = { AnyView(Text(value).foregroundStyle(.secondary).monospacedDigit().lineLimit(1).truncationMode(.middle)) }
     }
 }

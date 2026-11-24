@@ -120,7 +120,7 @@ struct SettingsView: View {
                         Text("System").tag(0); Text("Light").tag(1); Text("Dark").tag(2)
                     } label: { SettingLabel(title: "Appearance", symbol: "circle.lefthalf.filled", color: .black) }
                     Picker(selection: $settings.backgroundStyle) {
-                        Text("Colour Gradient").tag(0); Text("Plain").tag(1); Text("Black").tag(2); Text("White").tag(3)
+                        Text("Aurora (animated)").tag(0); Text("Classic Gradient").tag(4); Text("Plain").tag(1); Text("Black").tag(2); Text("White").tag(3)
                     } label: { SettingLabel(title: "Background", symbol: "photo.fill", color: .purple) }
                     VStack(alignment: .leading, spacing: 10) {
                         SettingLabel(title: "Accent Colour", symbol: "paintpalette.fill", color: Accent.all[min(accentIndex, Accent.all.count - 1)].color)

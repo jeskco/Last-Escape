@@ -23,22 +23,24 @@ struct StudioView: View {
     @State private var objectCategory: ObjectCategory = .transform
     @State private var editCategory: EditCategory = .select
     @State private var lastOpOpen = true
+    @Namespace private var modeNS
+    @Namespace private var chipNS
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: scheme == .dark ? [Color(white: 0.16), Color(white: 0.07)] : [Color(white: 0.96), Color(white: 0.84)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+            Aurora(accent: .accentColor, intensity: 0.55, animated: !AppSettings.shared.batterySaver)
             StudioSceneView(model: model).ignoresSafeArea()
 
             VStack(spacing: 10) {
                 topBar
                 hint
                 Spacer(minLength: 0)
-                if let op = model.lastOp { lastOpPanel(op) }
+                if let op = model.lastOp { lastOpPanel(op).id(op.title) }
                 bottomArea
             }
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
+            .animation(Theme.spring, value: model.lastOp?.title)
+            .animation(Theme.spring, value: model.mode)
 
             if let t = model.toast {
                 VStack {
@@ -120,9 +122,10 @@ struct StudioView: View {
         GlassGroup(spacing: 8) {
             HStack(spacing: 8) {
                 Button { onDone(model) } label: {
-                    Text("Done").font(.system(size: 16, weight: .semibold)).padding(.horizontal, 16).frame(height: 44)
+                    Image(systemName: "checkmark").font(.system(size: 16, weight: .heavy)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44).contentShape(Circle())
                 }
-                .buttonStyle(.plain).glass(Capsule(), interactive: true)
+                .buttonStyle(.pressable).glass(Circle(), tint: .accentColor, interactive: true).accessibilityLabel("Done")
 
                 Menu {
                     Button("Rename", systemImage: "pencil") { newName = model.projectName; renaming = true }
@@ -130,20 +133,28 @@ struct StudioView: View {
                     Button("Outliner", systemImage: "list.bullet.indent") { showOutliner = true }
                     Button("Scene & World", systemImage: "globe") { openProperties(.world) }
                     Divider()
-                    Toggle(isOn: $model.showGrid) { Label("Grid", systemImage: "grid") }
+                    Toggle(isOn: $model.showGrid) { Label("Grid & Floor", systemImage: "grid") }
                     Toggle(isOn: $model.snapping) { Label("Snapping", systemImage: "ruler") }
                     Button("Frame All", systemImage: "scope") { model.selection = []; model.focusSelection() }
                 } label: {
                     VStack(spacing: 0) {
-                        Text(model.projectName).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                        Text(model.projectName).font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(1).truncationMode(.middle)
                         Text(stats).font(.caption2).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
                     }
-                    .padding(.horizontal, 14).frame(maxWidth: .infinity).frame(height: 44)
+                    .padding(.horizontal, 12).frame(maxWidth: .infinity).frame(height: 44)
                 }
                 .buttonStyle(.plain).glass(Capsule(), interactive: true)
 
-                circle("arrow.uturn.backward", enabled: model.canUndo) { model.undo() }.accessibilityLabel("Undo")
-                circle("arrow.uturn.forward", enabled: model.canRedo) { model.redo() }.accessibilityLabel("Redo")
+                HStack(spacing: 0) {
+                    Button { model.undo() } label: { Image(systemName: "arrow.uturn.backward").frame(width: 40, height: 44).contentShape(Rectangle()) }
+                        .disabled(!model.canUndo).opacity(model.canUndo ? 1 : 0.4).accessibilityLabel("Undo")
+                    Button { model.redo() } label: { Image(systemName: "arrow.uturn.forward").frame(width: 40, height: 44).contentShape(Rectangle()) }
+                        .disabled(!model.canRedo).opacity(model.canRedo ? 1 : 0.4).accessibilityLabel("Redo")
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .buttonStyle(.pressable)
+                .glass(Capsule(), interactive: true)
+
                 Menu {
                     Picker("Shading", selection: $model.shading) {
                         ForEach(ViewShading.allCases) { Label($0.rawValue, systemImage: $0.icon).tag($0) }
@@ -154,11 +165,14 @@ struct StudioView: View {
                     Image(systemName: model.shading.icon).font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).contentShape(Circle())
                 }
                 .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Viewport shading")
-                circle("camera.aperture") { showRender = true }.accessibilityLabel("Render")
-                Button { showExport = true } label: {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44)
+
+                Menu {
+                    Button("Export Model…", systemImage: "square.and.arrow.up") { showExport = true }
+                    Button("Render Image…", systemImage: "camera.aperture") { showRender = true }
+                } label: {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 44).contentShape(Circle())
                 }
-                .buttonStyle(.plain).glass(Circle(), tint: .accentColor, interactive: true).accessibilityLabel("Export")
+                .buttonStyle(.plain).glass(Circle(), interactive: true).accessibilityLabel("Export or render")
             }
         }
     }
@@ -243,7 +257,10 @@ struct StudioView: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity)
+            .id(model.mode)
+            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
             .glass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .animation(Theme.spring, value: model.mode)
             modeSwitcher
         }
     }
@@ -252,17 +269,17 @@ struct StudioView: View {
         HStack(spacing: 4) {
             ForEach(StudioMode.allCases) { m in
                 let on = model.mode == m
-                Button { withAnimation(.snappy) { model.mode = m }; Haptics.select() } label: {
+                Button { withAnimation(Theme.snappy) { model.mode = m }; Haptics.select() } label: {
                     VStack(spacing: 2) {
                         Image(systemName: m.icon).font(.system(size: 16, weight: .semibold))
                         Text(m.title).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .foregroundStyle(on ? Color.white : Color.primary)
-                    .background { if on { Capsule().fill(Color.accentColor) } }
+                    .background { if on { Capsule().fill(Color.accentColor.gradient).matchedGeometryEffect(id: "mode", in: modeNS) } }
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable(0.92))
             }
         }
         .padding(5)
@@ -274,12 +291,15 @@ struct StudioView: View {
             HStack(spacing: 6) {
                 ForEach(all) { c in
                     let on = sel.wrappedValue == c
-                    Button { withAnimation(.snappy) { sel.wrappedValue = c }; Haptics.select() } label: {
-                        Text(c.rawValue).font(.caption.weight(.semibold)).padding(.horizontal, 12).frame(height: 28)
+                    Button { withAnimation(Theme.snappy) { sel.wrappedValue = c }; Haptics.select() } label: {
+                        Text(c.rawValue).font(.caption.weight(.semibold)).fixedSize().padding(.horizontal, 12).frame(height: 30)
                             .foregroundStyle(on ? Color.white : Color.primary)
-                            .background(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.07)), in: Capsule())
+                            .background {
+                                if on { Capsule().fill(Color.accentColor.gradient).matchedGeometryEffect(id: "chip", in: chipNS) }
+                                else { Capsule().fill(Color.primary.opacity(0.07)) }
+                            }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable(0.93))
                 }
             }
         }
@@ -370,12 +390,11 @@ struct StudioView: View {
                 Picker("Select", selection: $model.selectMode) {
                     ForEach(SelectMode.allCases) { Image(systemName: $0.icon).tag($0).accessibilityLabel($0.rawValue) }
                 }
-                .pickerStyle(.segmented).frame(maxWidth: 150)
+                .pickerStyle(.segmented).frame(maxWidth: 124)
                 GizmoPicker(model: model, compact: true)
                 Spacer(minLength: 0)
                 SmallToggle(icon: "circle.dotted.circle", on: model.proportional) { model.proportional.toggle() }.accessibilityLabel("Proportional editing")
                 SmallToggle(icon: "checkmark.circle", on: model.multiSelect) { model.multiSelect.toggle() }.accessibilityLabel("Multi-select")
-                SmallToggle(icon: "eye.trianglebadge.exclamationmark", on: model.xray) { model.xray.toggle() }.accessibilityLabel("X-ray")
             }
             if model.proportional {
                 LabeledSlider(icon: "circle.dotted.circle", value: $model.proportionalRadius, range: 0.05...2)
@@ -579,7 +598,7 @@ struct StudioView: View {
 struct ToolStrip<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
-        ScrollView(.horizontal) { HStack(spacing: 4) { content() }.padding(.horizontal, 2) }
+        ScrollView(.horizontal) { HStack(spacing: 6) { content() }.padding(.horizontal, 2) }
             .scrollIndicators(.hidden)
     }
 }
@@ -593,10 +612,14 @@ struct ToolLabel: View {
         VStack(spacing: 4) {
             Image(systemName: icon).font(.system(size: 18, weight: .semibold)).frame(height: 24)
                 .foregroundStyle(on ? Color.white : destructive ? Color.red : (tint ?? Color.primary))
-            Text(title).font(.caption2.weight(.medium)).lineLimit(1).foregroundStyle(on ? Color.white : Color.primary)
+            Text(title).font(.caption2.weight(.semibold)).lineLimit(1).fixedSize().foregroundStyle(on ? Color.white : Color.primary)
         }
-        .frame(minWidth: 62).frame(height: 56).padding(.horizontal, 2)
-        .background { if on { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.accentColor) } }
+        .padding(.horizontal, 8)
+        .frame(minWidth: 58).frame(height: 58)
+        .background {
+            if on { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.accentColor.gradient) }
+            else { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.045)) }
+        }
         .contentShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -610,7 +633,7 @@ struct ToolButton: View {
     let action: () -> Void
     var body: some View {
         Button { action(); Haptics.select() } label: { ToolLabel(icon: icon, title: title, tint: tint, on: on, destructive: destructive) }
-            .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35)
+            .buttonStyle(.pressable(0.9)).disabled(!enabled).opacity(enabled ? 1 : 0.35)
     }
 }
 
@@ -627,9 +650,10 @@ struct SmallToggle: View {
             }
             .padding(.horizontal, title == nil ? 0 : 12).frame(minWidth: 34).frame(height: 34)
             .foregroundStyle(on ? Color.white : Color.primary)
-            .background(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+            .background(on ? AnyShapeStyle(Color.accentColor.gradient) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+            .fixedSize()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable(0.92))
     }
 }
 
@@ -654,9 +678,9 @@ struct GizmoPicker: View {
                 let on = model.gizmoKind == k
                 Button { model.gizmoKind = k; Haptics.select() } label: {
                     if compact {
-                        Image(systemName: k.icon).font(.footnote.weight(.semibold)).frame(width: 36, height: 32)
+                        Image(systemName: k.icon).font(.footnote.weight(.semibold)).frame(width: 34, height: 32)
                             .foregroundStyle(on ? Color.white : Color.primary)
-                            .background { if on { Capsule().fill(Color.accentColor) } }
+                            .background { if on { Capsule().fill(Color.accentColor.gradient) } }
                     } else {
                         ToolLabel(icon: k.icon, title: k.rawValue, on: on)
                     }

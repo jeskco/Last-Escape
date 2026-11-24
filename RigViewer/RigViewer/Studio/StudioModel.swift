@@ -52,6 +52,12 @@ final class StudioModel: ObservableObject {
     @Published var voxelResolution: Double = 72
     var dragWeights: [(Int, Float)] = []
     var keepLastOpOnPush = false
+    private var goals: [UUID: Goal] = [:]
+    private var directGrabY: Float = 0
+    private var directStart: SIMD3<Float>?
+    private var lastSnapKey: SIMD3<Int32>?
+    private var rotateTurns: Float = 0
+    private var lastRingAngle: Float = 0
     var paintStrokeActive = false
 
     // Edit-mode selection (indices into the primary object's mesh)
@@ -599,7 +605,7 @@ final class StudioModel: ObservableObject {
 
     // MARK: gizmo
 
-    private enum Handle: Equatable { case axis(Int), center }
+    private enum Handle: Equatable { case axis(Int), center, direct }
     private var dragHandle: Handle?
     private var dragStart = CGPoint.zero
     private var dragStartAngle: Float = 0
@@ -686,7 +692,33 @@ final class StudioModel: ObservableObject {
             let hits = v.hitTest(p, options: [.rootNode: o.node, .searchMode: SCNHitTestSearchMode.closest.rawValue])
             return hits.contains { $0.node === o.node } ? "sculpt" : nil
         }
-        return handle(at: p) != nil ? "gizmo" : nil
+        if handle(at: p) != nil { return "gizmo" }
+        if directHit(at: p) { return "direct" }
+        return nil
+    }
+
+    /// One finger on a selected object moves/rotates/scales it directly (no need to hit the small arrows).
+    private func directHit(at p: CGPoint) -> Bool {
+        guard mode == .object, !selection.isEmpty, let v = view else { return false }
+        let hits = v.hitTest(p, options: [.categoryBitMask: Self.objectMask, .searchMode: SCNHitTestSearchMode.closest.rawValue, .ignoreHiddenNodes: true])
+        guard let h = hits.first, let o = owner(of: h.node), selection.contains(o.id) else { return false }
+        directGrabY = Float(h.worldCoordinates.y)
+        return true
+    }
+
+    /// Point where the finger's ray meets the horizontal plane y = h (nil when looking along it).
+    private func floorPoint(_ p: CGPoint, y h: Float) -> SIMD3<Float>? {
+        guard let v = view else { return nil }
+        let a = SIMD3<Float>(v.unprojectPoint(SCNVector3(Float(p.x), Float(p.y), 0)))
+        let b = SIMD3<Float>(v.unprojectPoint(SCNVector3(Float(p.x), Float(p.y), 1)))
+        let d = b - a
+        guard abs(d.y) > 1e-5 else { return nil }
+        let t = (h - a.y) / d.y
+        guard t > 0 else { return nil }
+        let q = a + d * t
+        // Avoid flinging objects to the horizon when the view is very flat.
+        if simd_length(q - cameraNode.simdWorldPosition) > max(simd_length(cameraNode.simdWorldPosition - startPivot) * 6, 5) { return nil }
+        return q
     }
 
     private func handle(at p: CGPoint) -> Handle? {
@@ -694,7 +726,7 @@ final class StudioModel: ObservableObject {
         let s = gizmoScale
         let tp = SIMD2<Float>(Float(p.x), Float(p.y))
         let c3 = project(piv); let c = SIMD2(c3.x, c3.y)
-        if simd_length(tp - c) < 26 { return .center }
+        if simd_length(tp - c) < 34 { return .center }
         let kind: GizmoKind = (mode == .pose && gizmoKind == .scale) ? GizmoKind.rotate : gizmoKind
         var best: (Handle, Float)? = nil
         for i in 0..<3 {
@@ -715,7 +747,7 @@ final class StudioModel: ObservableObject {
                 let t = l2 > 0 ? max(0.15, min(1, simd_dot(tp - c, ab) / l2)) : 0
                 d = simd_length(c + ab * t - tp)
             }
-            guard d < 26 else { continue }
+            guard d < 36 else { continue }
             if let b = best, d >= b.1 { continue }
             best = (.axis(i), d)
         }
@@ -725,9 +757,13 @@ final class StudioModel: ObservableObject {
     func dragBegan(at p: CGPoint) {
         if mode == .sculpt { sculptBegan(at: p); return }
         if mode == .paint { paintBegan(at: p); return }
-        guard let h = handle(at: p), let piv = pivot else { return }
+        var found = handle(at: p)
+        if found == nil, directHit(at: p) { found = .direct }
+        guard let h = found, let piv = pivot else { return }
         pushUndo()
         dragHandle = h; dragStart = p; startPivot = piv
+        lastSnapKey = nil
+        if h == .direct { directStart = floorPoint(p, y: directGrabY) }
         let c = project(piv); dragStartAngle = atan2f(Float(p.y) - c.y, Float(p.x) - c.x)
         switch mode {
         case .object:
@@ -754,13 +790,29 @@ final class StudioModel: ObservableObject {
         let kind: GizmoKind = (mode == .pose && gizmoKind == .scale) ? GizmoKind.rotate : gizmoKind
 
         switch (kind, h) {
+        case (.move, .direct):
+            var delta: SIMD3<Float>
+            if let s0 = directStart, let s1 = floorPoint(p, y: directGrabY) { delta = s1 - s0 }
+            else { delta = (camRight * Float(t.x) - camUp * Float(t.y)) * wpp }
+            if snapping { delta = (delta / 0.1).rounded(.toNearestOrAwayFromZero) * 0.1; snapTick(delta) }
+            applyMove(delta)
+        case (.rotate, .direct):
+            var yaw = Float(t.x) * 0.011, tilt = Float(t.y) * 0.011
+            if snapping { let st = Float.pi / 12; yaw = (yaw / st).rounded() * st; tilt = (tilt / st).rounded() * st; snapTick(SIMD3(yaw, tilt, 0)) }
+            applyRotate(simd_quatf(angle: yaw, axis: [0, 1, 0]) * simd_quatf(angle: tilt, axis: camRight))
+        case (.scale, .direct):
+            var f = expf(-Float(t.y) / 180)
+            if snapping { f = max(0.1, (f / 0.1).rounded() * 0.1); snapTick(SIMD3(f, 0, 0)) }
+            applyScale(SIMD3(repeating: f))
         case (.move, .center):
             var delta = (camRight * Float(t.x) - camUp * Float(t.y)) * wpp
-            if snapping { delta = (delta / 0.1).rounded(.toNearestOrAwayFromZero) * 0.1 }
+            if snapping { delta = (delta / 0.1).rounded(.toNearestOrAwayFromZero) * 0.1; snapTick(delta) }
             applyMove(delta)
         case (.move, .axis(let i)):
             let along = axisDelta(i, translation: t)
-            applyMove(axes[i] * (snapping ? (along / 0.1).rounded() * 0.1 : along))
+            let v = snapping ? (along / 0.1).rounded() * 0.1 : along
+            if snapping { snapTick(SIMD3(v, 0, 0)) }
+            applyMove(axes[i] * v)
         case (.rotate, .center):
             let q = simd_quatf(angle: Float(t.x) * 0.012, axis: camUp) * simd_quatf(angle: Float(t.y) * 0.012, axis: camRight)
             applyRotate(q)
@@ -770,7 +822,11 @@ final class StudioModel: ObservableObject {
             var ang = a - dragStartAngle
             let toCam = cameraNode.simdWorldPosition - piv
             if simd_dot(axes[i], toCam) > 0 { ang = -ang }
-            if snapping { let step = Float.pi / 12; ang = (ang / step).rounded() * step }
+            while ang > .pi { ang -= 2 * .pi }; while ang < -.pi { ang += 2 * .pi }
+            ang += rotateTurns
+            if abs(ang - lastRingAngle) > .pi { rotateTurns += ang > lastRingAngle ? -2 * .pi : 2 * .pi; ang += ang > lastRingAngle ? -2 * .pi : 2 * .pi }
+            lastRingAngle = ang
+            if snapping { let step = Float.pi / 12; ang = (ang / step).rounded() * step; snapTick(SIMD3(ang, 0, 0)) }
             applyRotate(simd_quatf(angle: ang, axis: axes[i]))
         case (.scale, .center):
             applyScale(SIMD3(repeating: expf(-Float(t.y) / 160)))
@@ -785,6 +841,7 @@ final class StudioModel: ObservableObject {
         if mode == .sculpt { sculptEnded(); return }
         if mode == .paint { paintEnded(); return }
         dragHandle = nil
+        directStart = nil; rotateTurns = 0; lastRingAngle = 0
         startBone = nil
         touch()
         refreshOverlay()
@@ -800,7 +857,7 @@ final class StudioModel: ObservableObject {
     private func applyMove(_ delta: SIMD3<Float>) {
         switch mode {
         case .object:
-            for o in selectedObjects { if let s = startTransforms[o.id] { o.node.simdPosition = s.0 + delta } }
+            for o in selectedObjects { if let s = startTransforms[o.id] { setGoal(o, position: s.0 + delta) } }
         case .edit:
             guard let o = primary, var m = o.mesh, !startPositions.isEmpty else { return }
             let inv = o.node.simdWorldTransform.inverse
@@ -819,8 +876,7 @@ final class StudioModel: ObservableObject {
         case .object:
             for o in selectedObjects {
                 guard let s = startTransforms[o.id] else { continue }
-                o.node.simdOrientation = q * s.1
-                o.node.simdPosition = startPivot + q.act(s.0 - startPivot)
+                setGoal(o, position: startPivot + q.act(s.0 - startPivot), orientation: q * s.1)
             }
         case .edit:
             guard let o = primary, var m = o.mesh, !startPositions.isEmpty else { return }
@@ -845,8 +901,7 @@ final class StudioModel: ObservableObject {
         case .object:
             for o in selectedObjects {
                 guard let s = startTransforms[o.id] else { continue }
-                o.node.simdScale = s.2 * f
-                if selection.count > 1 { o.node.simdPosition = startPivot + (s.0 - startPivot) * f }
+                setGoal(o, position: selection.count > 1 ? startPivot + (s.0 - startPivot) * f : nil, scale: s.2 * f)
             }
         case .edit:
             guard let o = primary, var m = o.mesh, !startPositions.isEmpty else { return }
@@ -1219,13 +1274,55 @@ final class StudioModel: ObservableObject {
             poseTime = t
             applyPose(at: t)
         }
+        easeGoals(Float(dt))
         updateGizmo()
         updateJoints()
+    }
+
+    // MARK: eased manipulation (objects glide to where your finger says instead of jumping)
+
+    private struct Goal { var p: SIMD3<Float>; var q: simd_quatf; var s: SIMD3<Float> }
+
+    private func setGoal(_ o: StudioObject, position: SIMD3<Float>? = nil, orientation: simd_quatf? = nil, scale: SIMD3<Float>? = nil) {
+        var g = goals[o.id] ?? Goal(p: o.node.simdPosition, q: o.node.simdOrientation, s: o.node.simdScale)
+        if let position { g.p = position }
+        if let orientation { g.q = orientation }
+        if let scale { g.s = scale }
+        goals[o.id] = g
+    }
+
+    private func easeGoals(_ dt: Float) {
+        guard !goals.isEmpty else { return }
+        let k = dt <= 0 ? 1 : 1 - expf(-dt * 26)
+        for (id, g) in goals {
+            guard let o = objects.first(where: { $0.id == id }) else { goals[id] = nil; continue }
+            let n = o.node
+            n.simdPosition += (g.p - n.simdPosition) * k
+            var q = g.q; if simd_dot(q.vector, n.simdOrientation.vector) < 0 { q = simd_quatf(vector: -q.vector) }
+            n.simdOrientation = simd_slerp(n.simdOrientation, q, k)
+            n.simdScale += (g.s - n.simdScale) * k
+            if dragHandle == nil && simd_length(g.p - n.simdPosition) < 1e-4 && simd_length(g.s - n.simdScale) < 1e-4 && abs(simd_dot(q.vector, n.simdOrientation.vector)) > 0.999999 {
+                n.simdPosition = g.p; n.simdOrientation = g.q; n.simdScale = g.s
+                goals[id] = nil
+            }
+        }
+    }
+
+    /// Finishes any easing immediately (before saving, undo snapshots, exports).
+    func settleGoals() {
+        for (id, g) in goals { if let o = objects.first(where: { $0.id == id }) { o.node.simdPosition = g.p; o.node.simdOrientation = g.q; o.node.simdScale = g.s } }
+        goals = [:]
+    }
+
+    private func snapTick(_ v: SIMD3<Float>) {
+        let key = SIMD3<Int32>(Int32((v.x * 1000).rounded()), Int32((v.y * 1000).rounded()), Int32((v.z * 1000).rounded()))
+        if key != lastSnapKey { if lastSnapKey != nil { Haptics.select() }; lastSnapKey = key }
     }
 
     // MARK: undo
 
     func snapshot() -> StudioSnapshot {
+        settleGoals()
         var pose: [ObjectIdentifier: PoseTransform] = [:]
         for b in bones { pose[ObjectIdentifier(b.node)] = currentTransform(b.node) }
         return StudioSnapshot(objects: objects.map(record), order: objects.map(\.id), pose: pose)
