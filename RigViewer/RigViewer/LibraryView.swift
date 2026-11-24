@@ -25,6 +25,7 @@ struct FillImage: View {
 struct LibraryView: View {
     @ObservedObject var model: ViewerModel
     @Binding var isPresented: Bool
+    @State private var showSettings = false
 
     private func bundled(_ name: String) -> UIImage? {
         Bundle.main.url(forResource: name, withExtension: "jpg").flatMap { UIImage(contentsOfFile: $0.path) }
@@ -45,7 +46,12 @@ struct LibraryView: View {
             .scrollIndicators(.hidden)
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Rig Viewer")
+            .sheet(isPresented: $showSettings) { SettingsView(model: model) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSettings = true } label: { Image(systemName: "gearshape").fontWeight(.semibold) }
+                        .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { isPresented = false } label: { Image(systemName: "xmark").fontWeight(.semibold) }
                         .accessibilityLabel("Close")

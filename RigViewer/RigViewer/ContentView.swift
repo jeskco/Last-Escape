@@ -9,11 +9,13 @@ enum Detent: Int { case peek, medium, large }
 
 struct ContentView: View {
     @StateObject private var model = ViewerModel()
-    @State private var showLibrary = true
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var showLibrary = AppSettings.shared.libraryOnLaunch
+    @State private var showSettings = false
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
-    @State private var detent: Detent = .peek
+    @State private var detent: Detent = AppSettings.shared.startExpanded ? .medium : .peek
     @State private var drag: CGFloat = 0
     @State private var snapshot: SnapshotItem?
     @AppStorage("accentIndex") private var accentIndex = 0
@@ -25,8 +27,11 @@ struct ContentView: View {
         GeometryReader { geo in
             let landscape = geo.size.width > geo.size.height && geo.size.width > 600
             ZStack {
-                Backdrop(accent: accent).ignoresSafeArea()
-                SceneViewer(model: model, onSingleTap: singleTap, onDoubleTap: { model.frame() })
+                Backdrop(accent: accent, style: settings.backgroundStyle).ignoresSafeArea()
+                SceneViewer(model: model, onSingleTap: singleTap, onDoubleTap: {
+                    guard settings.doubleTapReset else { return }
+                    Haptics.tap(); model.frame()
+                })
                     .ignoresSafeArea()
 
                 if !immersive {
@@ -76,7 +81,9 @@ struct ContentView: View {
             .animation(.spring(duration: 0.4, bounce: 0.1), value: detent)
         }
         .tint(accent)
-        .fullScreenCover(isPresented: $showLibrary) { LibraryView(model: model, isPresented: $showLibrary).tint(accent) }
+        .preferredColorScheme(settings.colorScheme)
+        .fullScreenCover(isPresented: $showLibrary) { LibraryView(model: model, isPresented: $showLibrary).tint(accent).preferredColorScheme(settings.colorScheme) }
+        .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
         .onOpenURL { url in showLibrary = false; model.importFiles([url]) }
     }
@@ -93,7 +100,8 @@ struct ContentView: View {
 
     private func enterFullScreen() {
         withAnimation(.spring(duration: 0.5, bounce: 0.15)) { immersive = true }
-        model.showToast("Tap the model to show the exit button")
+        Haptics.tap()
+        if settings.showHints { model.showToast("Tap the model to show the exit button") }
     }
 
     // MARK: top bar — three controls, one glass group
@@ -139,7 +147,8 @@ struct ContentView: View {
                     InspectorContent(model: model, tab: tab, accentIndex: $accentIndex,
                                      onFullScreen: enterFullScreen,
                                      onSnapshot: { if let img = model.snapshot() { snapshot = SnapshotItem(image: img) } },
-                                     onAR: openAR)
+                                     onAR: openAR,
+                                     onSettings: { showSettings = true })
                         .padding(.horizontal, 12).padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
@@ -162,7 +171,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Button { model.isPlaying.toggle() } label: {
+                Button { model.isPlaying.toggle(); Haptics.tap() } label: {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 44, height: 44).background(accent, in: Circle()).contentShape(Circle())
                         .contentTransition(.symbolEffect(.replace))
@@ -202,7 +211,7 @@ struct ContentView: View {
             .buttonStyle(.plain).accessibilityLabel("Full screen")
 
             if !landscape {
-                Button { detent = detent == .peek ? .medium : .peek } label: {
+                Button { detent = detent == .peek ? .medium : .peek; Haptics.select() } label: {
                     Image(systemName: "chevron.up").font(.system(size: 14, weight: .bold)).rotationEffect(.degrees(detent == .peek ? 0 : 180))
                         .frame(width: 36, height: 36).background(Color.primary.opacity(0.08), in: Circle())
                 }
@@ -234,14 +243,21 @@ struct ContentView: View {
 /// Soft colour field behind the 3D view so the glass has something to refract.
 struct Backdrop: View {
     let accent: Color
+    var style: Int = 0          // 0 gradient, 1 plain, 2 black, 3 white
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        ZStack {
-            (scheme == .dark ? Color(white: 0.06) : Color(red: 0.93, green: 0.94, blue: 0.96))
-            RadialGradient(colors: [accent.opacity(scheme == .dark ? 0.28 : 0.22), .clear], center: .init(x: 0.15, y: 0.15), startRadius: 0, endRadius: 420)
-            RadialGradient(colors: [Color.orange.opacity(0.16), .clear], center: .init(x: 0.9, y: 0.1), startRadius: 0, endRadius: 360)
-            RadialGradient(colors: [Color.purple.opacity(0.16), .clear], center: .init(x: 0.75, y: 0.95), startRadius: 0, endRadius: 420)
-            RadialGradient(colors: [(scheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.7)), .clear], center: .init(x: 0.5, y: 0.38), startRadius: 0, endRadius: 380)
+        switch style {
+        case 1: Color(uiColor: .systemGroupedBackground)
+        case 2: Color.black
+        case 3: Color.white
+        default:
+            ZStack {
+                (scheme == .dark ? Color(white: 0.06) : Color(red: 0.93, green: 0.94, blue: 0.96))
+                RadialGradient(colors: [accent.opacity(scheme == .dark ? 0.28 : 0.22), .clear], center: .init(x: 0.15, y: 0.15), startRadius: 0, endRadius: 420)
+                RadialGradient(colors: [Color.orange.opacity(0.16), .clear], center: .init(x: 0.9, y: 0.1), startRadius: 0, endRadius: 360)
+                RadialGradient(colors: [Color.purple.opacity(0.16), .clear], center: .init(x: 0.75, y: 0.95), startRadius: 0, endRadius: 420)
+                RadialGradient(colors: [(scheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.7)), .clear], center: .init(x: 0.5, y: 0.38), startRadius: 0, endRadius: 380)
+            }
         }
     }
 }

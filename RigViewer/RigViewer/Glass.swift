@@ -1,11 +1,15 @@
 import SwiftUI
 
 /// Liquid Glass when built with the iOS 26 SDK and running on iOS 26; a material fallback otherwise.
+@MainActor
 extension View {
     @ViewBuilder
     func glass<S: Shape>(_ shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
         #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
+        if AppSettings.shared.solidPanels {
+            self.background(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color(uiColor: .secondarySystemBackground)), in: shape)
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        } else if #available(iOS 26.0, *) {
             self.glassEffect(Glass.regular.tint(tint).interactive(interactive), in: shape)
         } else {
             self.background(.ultraThinMaterial, in: shape)

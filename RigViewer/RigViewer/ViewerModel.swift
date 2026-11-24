@@ -4,6 +4,7 @@ import SceneKit.ModelIO
 import ModelIO
 import GLTFKit2
 import UniformTypeIdentifiers
+import Combine
 
 struct ClipInfo: Identifiable {
     let id = UUID()
@@ -149,6 +150,8 @@ final class ViewerModel: ObservableObject {
     private var boneMarker: SCNNode?
     private var toastTask: Task<Void, Never>?
     private(set) var radius: Float = 1
+    private var settingsSinks = Set<AnyCancellable>()
+    private let settings = AppSettings.shared
 
     init() {
         let cam = SCNCamera()
@@ -161,6 +164,14 @@ final class ViewerModel: ObservableObject {
         let sun = SCNLight(); sun.type = .directional; sun.intensity = 900; sun.castsShadow = true; sun.shadowMode = .deferred
         sun.shadowColor = UIColor(white: 0, alpha: 0.32); sun.shadowRadius = 6; sun.shadowSampleCount = 12; sun.automaticallyAdjustsShadowProjection = true
         sunNode.light = sun; sunNode.name = "RigViewer.Sun"; sunNode.eulerAngles = SCNVector3(-Float.pi / 3, Float.pi / 5, 0)
+        fov = settings.defaultFOV; cam.fieldOfView = CGFloat(fov)
+        env = settings.defaultEnvironment
+        showSkeleton = settings.defaultSkeleton
+        groundShadow = settings.defaultGroundShadow
+        speed = settings.defaultSpeed
+        isPlaying = settings.autoplay
+        observeSettings()
+        applyRenderSettings()
         loadRecents()
         let m = Mannequin.make()
         install(scene: m.scene, gltfAnimations: [], extraClips: m.clips, url: nil, format: "Built in", name: "Mannequin", bytes: 0)
@@ -360,9 +371,43 @@ final class ViewerModel: ObservableObject {
         computeStats(); collectBones(); collectMaterials()
         applyEnvironment()
         currentClip = nil
+        isPlaying = settings.autoplay
         if !clips.isEmpty { play(0) }
         frame(animated: false)
         isLoading = false
+    }
+
+    // MARK: - settings
+
+    private func observeSettings() {
+        let s = settings
+        // Live-apply settings that change rendering or the current view (dropFirst skips the initial value).
+        Publishers.MergeMany(s.$hdr.map { _ in () }.eraseToAnyPublisher(), s.$bloom.map { _ in () }.eraseToAnyPublisher(),
+                             s.$shadowQuality.map { _ in () }.eraseToAnyPublisher())
+            .dropFirst(3)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyRenderSettings() }.store(in: &settingsSinks)
+        s.$defaultFOV.dropFirst().sink { [weak self] v in self?.fov = v }.store(in: &settingsSinks)
+        s.$defaultEnvironment.dropFirst().sink { [weak self] v in self?.env = v }.store(in: &settingsSinks)
+        s.$defaultSkeleton.dropFirst().sink { [weak self] v in self?.showSkeleton = v }.store(in: &settingsSinks)
+        s.$defaultGroundShadow.dropFirst().sink { [weak self] v in self?.groundShadow = v }.store(in: &settingsSinks)
+        s.$defaultSpeed.dropFirst().sink { [weak self] v in self?.speed = v }.store(in: &settingsSinks)
+        s.$loopAnimations.dropFirst().sink { [weak self] loop in
+            guard let self, let i = self.currentClip else { return }
+            self.clips[i].players.forEach { $0.animation.repeatCount = loop ? .greatestFiniteMagnitude : 1 }
+        }.store(in: &settingsSinks)
+        s.$maxRecents.dropFirst().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.pruneRecents(); self?.loadRecents() }.store(in: &settingsSinks)
+    }
+
+    private func applyRenderSettings() {
+        guard let cam = cameraNode.camera, let sun = sunNode.light else { return }
+        cam.wantsHDR = settings.hdr
+        cam.bloomIntensity = settings.bloom && settings.hdr ? 0.15 : 0
+        switch settings.shadowQuality {
+        case 0: sun.castsShadow = false
+        case 1: sun.castsShadow = true; sun.shadowSampleCount = 4; sun.shadowMapSize = CGSize(width: 1024, height: 1024); sun.shadowRadius = 3
+        default: sun.castsShadow = true; sun.shadowSampleCount = 12; sun.shadowMapSize = CGSize(width: 2048, height: 2048); sun.shadowRadius = 6
+        }
     }
 
     // MARK: - camera
@@ -412,7 +457,7 @@ final class ViewerModel: ObservableObject {
         clips.forEach { $0.players.forEach { $0.stop() } }
         currentClip = index
         for p in clips[index].players {
-            p.animation.repeatCount = .greatestFiniteMagnitude
+            p.animation.repeatCount = settings.loopAnimations ? .greatestFiniteMagnitude : 1
             p.speed = CGFloat(speed)
             p.play()
             p.paused = !isPlaying
@@ -597,7 +642,7 @@ final class ViewerModel: ObservableObject {
 
         let wrapper = SCNNode(); wrapper.name = "Model"
         let maxDim = max(stats.size.x, stats.size.y, stats.size.z)
-        if maxDim > 4 || (maxDim > 0 && maxDim < 0.03) { wrapper.simdScale = SIMD3(repeating: 0.6 / maxDim) }
+        if settings.arFitSize, maxDim > 4 || (maxDim > 0 && maxDim < 0.03) { wrapper.simdScale = SIMD3(repeating: 0.6 / maxDim) }
         let b = modelBounds()
         let models = topNodes
         models.forEach { wrapper.addChildNode($0) }
@@ -652,7 +697,7 @@ final class ViewerModel: ObservableObject {
 
     private func pruneRecents() {
         let sorted = recents.sorted { $0.date > $1.date }
-        for r in sorted.dropFirst(12) { try? FileManager.default.removeItem(at: Self.recentsDir.appendingPathComponent(r.id)) }
+        for r in sorted.dropFirst(settings.maxRecents) { try? FileManager.default.removeItem(at: Self.recentsDir.appendingPathComponent(r.id)) }
     }
 
     func openRecent(_ r: RecentItem) { open(url: r.mainURL, displayName: r.name) }

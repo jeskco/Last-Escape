@@ -91,7 +91,7 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
     private var sensitivity: Float {
         // About one full turn for a swipe across the screen width, whatever the device size.
         let w = Float(view?.bounds.width ?? 390)
-        return (2 * .pi) / max(w, 300) * 0.85
+        return (2 * .pi) / max(w, 300) * 0.85 * Float(AppSettings.shared.orbitSpeed)
     }
 
     @objc private func handleOrbit(_ g: UIPanGestureRecognizer) {
@@ -102,17 +102,19 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
         case .changed:
             let t = g.translation(in: v); g.setTranslation(.zero, in: v)
             guard multiTouch == 0, g.numberOfTouches == 1 else { return }
-            yaw -= Float(t.x) * sensitivity
-            pitch = clampPitch(pitch + Float(t.y) * sensitivity)
+            let sx: Float = AppSettings.shared.invertX ? -1 : 1, sy: Float = AppSettings.shared.invertY ? -1 : 1
+            yaw -= Float(t.x) * sensitivity * sx
+            pitch = clampPitch(pitch + Float(t.y) * sensitivity * sy)
         case .ended, .cancelled, .failed:
             touching = max(0, touching - 1)
             guard multiTouch == 0 else { return }
             let vel = g.velocity(in: v)
             // Ignore the tiny flick at the end of a slow, careful drag.
             let speed = hypot(vel.x, vel.y)
-            if speed > 120 {
-                yawVelocity = -Float(vel.x) * sensitivity
-                pitchVelocity = Float(vel.y) * sensitivity
+            if speed > 120, AppSettings.shared.momentum {
+                let sx: Float = AppSettings.shared.invertX ? -1 : 1, sy: Float = AppSettings.shared.invertY ? -1 : 1
+                yawVelocity = -Float(vel.x) * sensitivity * sx
+                pitchVelocity = Float(vel.y) * sensitivity * sy
                 let cap: Float = 9
                 yawVelocity = max(-cap, min(cap, yawVelocity)); pitchVelocity = max(-cap, min(cap, pitchVelocity))
             }
@@ -127,11 +129,12 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
             touching += 1; multiTouch += 1; glide = false; yawVelocity = 0; pitchVelocity = 0
             pinchStartDistance = distance; lastPinchCenter = g.location(in: v)
         case .changed:
-            let newDistance = clampDistance(pinchStartDistance / Float(max(g.scale, 0.01)))
+            let scale = powf(Float(max(g.scale, 0.01)), Float(AppSettings.shared.zoomSpeed))
+            let newDistance = clampDistance(pinchStartDistance / scale)
             // Zoom toward the point between the fingers: slide the target that way as we move in.
             let p = g.location(in: v)
             let zoomIn = newDistance < distance
-            if zoomIn, g.numberOfTouches >= 2 {
+            if zoomIn, g.numberOfTouches >= 2, AppSettings.shared.zoomToFingers {
                 let factor = (distance - newDistance) / max(distance, 0.0001)
                 target += worldOffset(fromCenterTo: p) * factor
             }
@@ -150,11 +153,12 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
             touching += 1; multiTouch += 1; glide = false; panVelocity = .zero; yawVelocity = 0; pitchVelocity = 0
         case .changed:
             let t = g.translation(in: v); g.setTranslation(.zero, in: v)
+            guard AppSettings.shared.twoFingerPan else { return }
             target += panDelta(dx: Float(t.x), dy: Float(t.y))
         case .ended, .cancelled, .failed:
             touching = max(0, touching - 1); multiTouch = max(0, multiTouch - 1)
             let vel = g.velocity(in: v)
-            if hypot(vel.x, vel.y) > 150 { panVelocity = panDelta(dx: Float(vel.x), dy: Float(vel.y)) * 0.6 }
+            if hypot(vel.x, vel.y) > 150, AppSettings.shared.twoFingerPan, AppSettings.shared.momentum { panVelocity = panDelta(dx: Float(vel.x), dy: Float(vel.y)) * 0.6 }
         default: break
         }
     }
@@ -162,7 +166,7 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
     @objc private func handleTwist(_ g: UIRotationGestureRecognizer) {
         switch g.state {
         case .began: touching += 1; multiTouch += 1; glide = false
-        case .changed: yaw -= Float(g.rotation); g.rotation = 0
+        case .changed: if AppSettings.shared.twistToRotate { yaw -= Float(g.rotation) }; g.rotation = 0
         case .ended, .cancelled, .failed: touching = max(0, touching - 1); multiTouch = max(0, multiTouch - 1)
         default: break
         }
@@ -182,18 +186,19 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
             if abs(yawVelocity) > 0.0005 || abs(pitchVelocity) > 0.0005 {
                 yaw += yawVelocity * dt
                 pitch = clampPitch(pitch + pitchVelocity * dt)
-                let decay: Float = expf(-4.2 * dt)
+                let decay: Float = expf(-AppSettings.shared.momentumDecay * dt)
                 yawVelocity *= decay; pitchVelocity *= decay
             }
             if simd_length(panVelocity) > 1e-6 {
                 target += panVelocity * dt
                 panVelocity *= expf(-6.0 * dt)
             }
-            if autoRotate { yaw -= 0.45 * dt }
+            if autoRotate { yaw -= 0.45 * Float(AppSettings.shared.turntableSpeed) * dt }
         }
 
         // Critically-damped easing: quick while touching (feels direct), softer when gliding to a reset.
-        let tau: Float = glide ? 0.16 : (touching > 0 ? 0.035 : 0.06)
+        let base = AppSettings.shared.cameraTau
+        let tau: Float = glide ? max(0.12, base * 1.5) : (touching > 0 ? base : base * 1.4)
         let a: Float = 1.0 - expf(-dt / tau)
         cYaw += (yaw - cYaw) * a
         cPitch += (pitch - cPitch) * a
@@ -218,7 +223,12 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
 
     // MARK: helpers
 
-    private func clampPitch(_ p: Float) -> Float { max(-1.48, min(1.48, p)) }
+    private func clampPitch(_ p: Float) -> Float { max(AppSettings.shared.allowBelow ? -1.48 : -0.02, min(1.48, p)) }
+
+    func setFrameRate(_ fps: Int) {
+        let f = Float(fps)
+        link?.preferredFrameRateRange = CAFrameRateRange(minimum: min(30, f), maximum: f, preferred: f)
+    }
     private func clampDistance(_ d: Float) -> Float { max(minDistance, min(maxDistance, d)) }
 
     /// World units per screen point at the target's depth.

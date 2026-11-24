@@ -8,6 +8,7 @@ struct InspectorContent: View {
     var onFullScreen: () -> Void
     var onSnapshot: () -> Void
     var onAR: () -> Void
+    var onSettings: () -> Void
 
     var body: some View {
         switch tab {
@@ -16,7 +17,7 @@ struct InspectorContent: View {
         case .clips: ClipsTab(model: model)
         case .bones: BonesTab(model: model)
         case .look: LookTab(model: model)
-        case .view: ViewTab(model: model, accentIndex: $accentIndex, onFullScreen: onFullScreen, onSnapshot: onSnapshot, onAR: onAR)
+        case .view: ViewTab(model: model, accentIndex: $accentIndex, onFullScreen: onFullScreen, onSnapshot: onSnapshot, onAR: onAR, onSettings: onSettings)
         }
     }
 }
@@ -43,7 +44,9 @@ struct InfoTab: View {
                 Row("Materials", value: "\(s.materials)")
                 Row("Textures", value: s.textures > 0 ? "\(s.textures) · \(Fmt.bytes(s.textureBytes)) in memory" : "None")
                 Row("Blend shapes", value: "\(s.morphs)")
-                Row("Dimensions", value: "\(Fmt.len(s.size.x)) × \(Fmt.len(s.size.y)) × \(Fmt.len(s.size.z))", showDivider: false)
+                Row("Width", value: AppSettings.shared.formatLength(s.size.x))
+                Row("Height", value: AppSettings.shared.formatLength(s.size.y))
+                Row("Depth", value: AppSettings.shared.formatLength(s.size.z), showDivider: false)
             }
         }
     }
@@ -287,6 +290,7 @@ struct ViewTab: View {
     var onFullScreen: () -> Void
     var onSnapshot: () -> Void
     var onAR: () -> Void
+    var onSettings: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
@@ -294,6 +298,7 @@ struct ViewTab: View {
                 ActionButton(icon: "arkit", title: "View in AR", action: onAR)
                 ActionButton(icon: "camera.aperture", title: "Snapshot", action: onSnapshot)
                 ActionButton(icon: "scope", title: "Recenter") { model.frame() }
+                ActionButton(icon: "gearshape.fill", title: "Settings", action: onSettings)
             }
             Section2(title: "Display") {
                 Row(label: "Skeleton") { Toggle("", isOn: $model.showSkeleton).labelsHidden() }
