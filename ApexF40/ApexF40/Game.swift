@@ -320,8 +320,16 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
         lastTime = t
         if dt <= 0 || dt > 0.1 { dt = 1 / 60 }
         guard ready, let w = world else { return }
-        frame(dt, w)
+        if let e = ApexTryCatch({ self.frame(dt, w) }) {
+            let msg = "\(e.name.rawValue): \(e.reason ?? "")"
+            CrashLog.step("frame exception: " + msg)
+            if !reportedFrameError {
+                reportedFrameError = true
+                DispatchQueue.main.async { self.errorText = "Error (please send to Claude): " + msg }
+            }
+        }
     }
+    private var reportedFrameError = false
 
     private var frameCount = 0
     private func frame(_ dt: Float, _ w: WorldData) {

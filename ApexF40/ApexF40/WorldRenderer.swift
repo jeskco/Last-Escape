@@ -256,7 +256,10 @@ final class WorldRenderer {
                 guard let url = Res.url(file, "World/chunks"), let data = try? Data(contentsOf: url) else {
                     self?.lock.lock(); self?.ready.append((i, SCNNode(), SCNNode())); self?.lock.unlock(); return
                 }
-                let (b, d) = WorldRenderer.parse(data, materials: mats, detail: det)
+                var b = SCNNode(), d = SCNNode()
+                if let e = ApexTryCatch({ (b, d) = WorldRenderer.parse(data, materials: mats, detail: det) }) {
+                    CrashLog.step("chunk \(file) failed: \(e.name.rawValue) \(e.reason ?? "")")
+                }
                 self?.lock.lock(); self?.ready.append((i, b, d)); self?.lock.unlock()
             }
         }

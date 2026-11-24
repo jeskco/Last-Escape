@@ -1,6 +1,7 @@
 import SwiftUI
 
 let mapImage: UIImage? = Res.image("map.jpg", "World")
+let appVersion: String = "v" + ((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?") + " (" + ((Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?") + ")"
 
 // MARK: - Building blocks
 
@@ -63,6 +64,7 @@ struct LoadingView: View {
                 Text("OPEN WORLD").font(.system(size: 15, weight: .bold)).tracking(8).foregroundStyle(.secondary)
                 ProgressView(value: game.loadProgress).tint(.red).frame(width: 260)
                 Text(game.loadText).font(.footnote).foregroundStyle(.secondary)
+                Text(appVersion).font(.caption2).foregroundStyle(.tertiary)
             }
         }
     }
@@ -81,6 +83,7 @@ struct MenuView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("APEX F40").font(.system(size: 44, weight: .black, design: .rounded)).italic()
                     Text("OPEN WORLD · CA · AZ · TX · FL · NY").font(.system(size: 11, weight: .bold)).tracking(3).foregroundStyle(.secondary)
+                    Text(appVersion).font(.caption2).foregroundStyle(.tertiary)
                 }
                 Text("Start in").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 ScrollView(.vertical, showsIndicators: false) {
