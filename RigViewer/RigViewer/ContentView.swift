@@ -18,14 +18,14 @@ struct ContentView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var showLibrary = AppSettings.shared.libraryOnLaunch
     @State private var showSettings = false
-    @State private var showStudio = false
-    @State private var studio: StudioModel?
+    @State private var studioSession: StudioSession?
     @State private var pendingStudio: StudioModel?
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
     @State private var detent: Detent = AppSettings.shared.startExpanded ? .medium : .peek
     @State private var drag: CGFloat = 0
+    @State private var sheetTotal: CGFloat = 800
     @State private var snapshot: SnapshotItem?
     @AppStorage("accentIndex") private var accentIndex = 0
 
@@ -56,7 +56,7 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             topBar.padding(.horizontal, 14).padding(.top, 4)
                             Spacer(minLength: 0)
-                            dock(height: dockHeight(total: geo.size.height) - drag, landscape: false)
+                            dock(height: liveDockHeight(total: geo.size.height), landscape: false)
                                 .padding(.horizontal, 10).padding(.bottom, 6)
                         }
                         .transition(.opacity)
@@ -86,23 +86,26 @@ struct ContentView: View {
                         .padding(28).frame(minWidth: 200).glass(RoundedRectangle(cornerRadius: 30, style: .continuous))
                 }
             }
+            .onAppear { sheetTotal = geo.size.height }
+            .onChange(of: geo.size.height) { _, h in sheetTotal = h }
             .animation(.spring(duration: 0.45, bounce: 0.15), value: immersive)
-            .animation(.spring(duration: 0.4, bounce: 0.1), value: detent)
+            .animation(sheetSpring, value: detent)
         }
         .tint(accent)
         .preferredColorScheme(settings.colorScheme)
         .fullScreenCover(isPresented: $showLibrary, onDismiss: {
             // Present Studio only once the library has fully gone, otherwise UIKit ignores the second cover.
-            if let s = pendingStudio { pendingStudio = nil; studio = s; showStudio = true }
+            if let s = pendingStudio { pendingStudio = nil; studioSession = StudioSession(model: s) }
         }) {
             LibraryView(model: model, isPresented: $showLibrary,
                         onNewModel: { pendingStudio = StudioModel(); showLibrary = false },
                         onOpenProject: { id in if let s = StudioModel.open(projectID: id) { pendingStudio = s; showLibrary = false } })
                 .tint(accent).preferredColorScheme(settings.colorScheme)
         }
-        .fullScreenCover(isPresented: $showStudio) {
-            if let studio { StudioView(model: studio, onDone: finishStudio).tint(accent).preferredColorScheme(settings.colorScheme) }
-            else { ProgressView().onAppear { showStudio = false } }
+        // item-based so the cover always receives the session it was opened with (an isPresented cover
+        // can capture a stale nil on its first presentation, which is why Studio used to need a second tap).
+        .fullScreenCover(item: $studioSession) { session in
+            StudioView(model: session.model, onDone: finishStudio).tint(accent).preferredColorScheme(settings.colorScheme)
         }
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
@@ -112,7 +115,7 @@ struct ContentView: View {
     // MARK: Studio
 
     private func startStudio(_ s: StudioModel) {
-        if showLibrary { pendingStudio = s; showLibrary = false } else { studio = s; showStudio = true }
+        if showLibrary { pendingStudio = s; showLibrary = false } else { studioSession = StudioSession(model: s) }
     }
 
     /// Moves the current model into Studio for posing, animating or editing.
@@ -120,7 +123,7 @@ struct ContentView: View {
         let lent = model.lendToStudio()
         let s = StudioModel()
         s.importLent(nodes: lent.nodes, name: lent.name.isEmpty ? "Model" : lent.name)
-        studio = s; showStudio = true
+        studioSession = StudioSession(model: s)
     }
 
     private func finishStudio(_ s: StudioModel) {
@@ -128,8 +131,7 @@ struct ContentView: View {
         let scene = s.makeViewerScene()
         s.detach()
         model.receiveFromStudio(scene: scene, newClips: s.savedClips, name: s.projectName)
-        showStudio = false
-        Task { @MainActor in try? await Task.sleep(nanoseconds: 600_000_000); studio = nil }
+        studioSession = nil
     }
 
     private func singleTap() {
@@ -181,8 +183,13 @@ struct ContentView: View {
 
     // MARK: dock — playback header + inspector in a single glass panel
     private func dock(height: CGFloat, landscape: Bool) -> some View {
-        let expanded = landscape || detent != .peek
+        let expanded = landscape || detent != .peek || drag < -24
         return VStack(spacing: 0) {
+            if !landscape {
+                Capsule().fill(Color.primary.opacity(0.28)).frame(width: 38, height: 5).padding(.top, 7)
+                    .frame(maxWidth: .infinity).contentShape(Rectangle())
+                    .highPriorityGesture(sheetDrag)
+            }
             header(landscape: landscape)
             if expanded {
                 PillTabs(items: InspectorTab.allCases.map { ($0, $0.icon, $0.rawValue) }, selection: $tab)
@@ -257,23 +264,44 @@ struct ContentView: View {
             .buttonStyle(.plain).accessibilityLabel("Full screen")
 
             if !landscape {
-                Button { detent = detent == .peek ? .medium : .peek; Haptics.select() } label: {
+                Button { withAnimation(sheetSpring) { detent = detent == .peek ? .medium : .peek }; Haptics.select() } label: {
                     Image(systemName: "chevron.up").font(.system(size: 14, weight: .bold)).rotationEffect(.degrees(detent == .peek ? 0 : 180))
                         .frame(width: 36, height: 36).background(Color.primary.opacity(0.08), in: Circle())
                 }
                 .buttonStyle(.plain).accessibilityLabel(detent == .peek ? "Show details" : "Hide details")
             }
         }
-        .padding(.horizontal, 12).frame(height: headerHeight)
+        .padding(.horizontal, 12).frame(height: headerHeight - (landscape ? 0 : 12))
         .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 8).onChanged { v in drag = max(-200, min(200, v.translation.height)) }.onEnded { v in
-            let vy = v.predictedEndTranslation.height
-            withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
-                if vy < -60 { detent = Detent(rawValue: min(2, detent.rawValue + 1))! }
-                else if vy > 60 { detent = Detent(rawValue: max(0, detent.rawValue - 1))! }
-                drag = 0
+        .highPriorityGesture(sheetDrag, including: landscape ? .none : .all)
+    }
+
+    // MARK: sheet dragging — follows the finger, then springs to the nearest height (using the flick speed)
+
+    private let sheetSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.86, blendDuration: 0.1)
+
+    private func liveDockHeight(total: CGFloat) -> CGFloat {
+        let base = dockHeight(total: total)
+        let raw = base - drag
+        let lo = headerHeight, hi = total * 0.9
+        // rubber-band past the ends
+        if raw < lo { return lo - (lo - raw) * 0.25 }
+        if raw > hi { return hi + (raw - hi) * 0.25 }
+        return raw
+    }
+
+    private var sheetDrag: some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { v in drag = v.translation.height }
+            .onEnded { v in
+                let total = sheetTotal
+                let base = dockHeight(total: total)
+                let projected = base - v.predictedEndTranslation.height
+                let options: [(Detent, CGFloat)] = [(.peek, headerHeight), (.medium, total * 0.5), (.large, total * 0.86)]
+                let target = options.min { abs($0.1 - projected) < abs($1.1 - projected) }!.0
+                if target != detent { Haptics.select() }
+                withAnimation(sheetSpring) { detent = target; drag = 0 }
             }
-        }, including: landscape ? .none : .all)
     }
 
     private func openAR() {
@@ -342,4 +370,9 @@ struct SnapshotSheet: View {
         }
         .presentationDetents([.medium, .large])
     }
+}
+
+struct StudioSession: Identifiable {
+    let id = UUID()
+    let model: StudioModel
 }

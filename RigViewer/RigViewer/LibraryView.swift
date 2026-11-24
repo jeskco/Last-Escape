@@ -51,7 +51,6 @@ struct LibraryView: View {
                     if !projects.isEmpty { projectsRow.entrance(2, shown: shown) }
                     if !model.recents.isEmpty { recents.entrance(3, shown: shown) }
                     samples.entrance(4, shown: shown)
-                    formats.entrance(5, shown: shown)
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 48)
             }
@@ -169,26 +168,35 @@ struct LibraryView: View {
             .shadow(color: .black.opacity(0.16), radius: 10, y: 6)
     }
 
-    // MARK: recents
+    // MARK: recents — a grid that grows with your history
+
+    @State private var showAllRecents = false
 
     private var recents: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let limit = showAllRecents ? model.recents.count : min(model.recents.count, 9)
+        return VStack(alignment: .leading, spacing: 12) {
             SectionTitle(title: "Recent", action: ("Clear", { withAnimation(Theme.spring) { model.clearRecents() } }))
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
-                    ForEach(model.recents) { r in
-                        Button { isPresented = false; model.openRecent(r) } label: {
-                            posterCard(image: r.thumbnail, title: r.name, detail: "\(r.format) · \(r.date.formatted(.relative(presentation: .named)))", width: 132, height: 132)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 10) {
+                ForEach(model.recents.prefix(limit)) { r in
+                    Button { isPresented = false; model.openRecent(r) } label: {
+                        GeometryReader { g in
+                            posterCard(image: r.thumbnail, title: r.name, detail: "\(r.format) · \(r.date.formatted(.relative(presentation: .named)))",
+                                       width: g.size.width, height: g.size.width)
                         }
-                        .buttonStyle(.pressable)
-                        .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { withAnimation(Theme.spring) { model.deleteRecent(r) } } }
+                        .aspectRatio(1, contentMode: .fit)
                     }
+                    .buttonStyle(.pressable)
+                    .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { withAnimation(Theme.spring) { model.deleteRecent(r) } } }
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
-                .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.viewAligned)
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
+            if model.recents.count > 9 {
+                Button { withAnimation(Theme.spring) { showAllRecents.toggle() } } label: {
+                    Label(showAllRecents ? "Show Less" : "Show All \(model.recents.count)", systemImage: showAllRecents ? "chevron.up" : "chevron.down")
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).frame(height: 44).card(22)
+                }
+                .buttonStyle(.pressable)
+            }
         }
     }
 
@@ -242,20 +250,5 @@ struct LibraryView: View {
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Theme.stroke(scheme), lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
-    }
-
-    // MARK: formats
-
-    private var formats: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(title: "Opens")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: 8)], alignment: .leading, spacing: 8) {
-                ForEach(["FBX", "GLB", "glTF", "USDZ", "USD", "OBJ", "STL", "PLY", "DAE", "ABC", "SCN", "ZIP"], id: \.self) { f in
-                    Text(f).font(.caption.weight(.bold)).frame(maxWidth: .infinity).frame(height: 32).card(16)
-                }
-            }
-            Text("Models with separate texture files: open the ZIP they came in, or select the model and its textures together.")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
