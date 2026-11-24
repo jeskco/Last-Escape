@@ -52,4 +52,4 @@ jobs:
           echo "run ${{ github.run_number }} ${{ job.status }} $(date -u)" > out/status.txt
           cd out && git init -q && git checkout -q -b apex-f40-builds && git add -A
           git -c user.name="apex-ci" -c user.email="ci@users.noreply.github.com" commit -qm "Build ${{ github.run_number }}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apex-f40-builds > push.log 2>&1 || { echo "::error title=push::$(sed ':a;N;$!ba;s/\n/%0A/g' push.log)"; exit 1; }
+          for i in 1 2 3 4; do git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apex-f40-builds > push.log 2>&1 && break; sleep 20; done; grep -q "rejected\|error\|fatal" push.log && { echo "::error title=push::$(sed ':a;N;$!ba;s/\n/%0A/g' push.log)"; exit 1; }
