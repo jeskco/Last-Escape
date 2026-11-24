@@ -23,6 +23,7 @@ final class WorldRenderer {
 
     init(meta: WorldMeta, device: MTLDevice?) {
         self.meta = meta
+        Res.device = device
         root.name = "World"
         let water = WorldRenderer.makeWater()
         waterMat = water
@@ -51,7 +52,7 @@ final class WorldRenderer {
     private static func pbr(_ color: UIColor? = nil, tex: String? = nil, rough: CGFloat = 0.8, metal: CGFloat = 0, doubleSided: Bool = false) -> SCNMaterial {
         let m = SCNMaterial()
         m.lightingModel = .physicallyBased
-        if let tex, let img = Res.image(tex) { prop(m.diffuse, img) } else { m.diffuse.contents = color ?? UIColor.gray }
+        if let tex, let img = Res.texture(tex) { prop(m.diffuse, img) } else { m.diffuse.contents = color ?? UIColor.gray }
         m.roughness.contents = NSNumber(value: Double(rough))
         m.metalness.contents = NSNumber(value: Double(metal))
         m.isDoubleSided = doubleSided
@@ -73,7 +74,7 @@ final class WorldRenderer {
         m.diffuse.contents = UIColor(red: 0.07, green: 0.25, blue: 0.36, alpha: 1)
         m.roughness.contents = NSNumber(value: 0.06)
         m.metalness.contents = NSNumber(value: 0.15)
-        if let n = Res.image("water_n_1k.jpg") {
+        if let n = Res.texture("water_n_1k.jpg", srgb: false) {
             prop(m.normal, n)
             m.normal.intensity = 0.55
             m.normal.contentsTransform = SCNMatrix4MakeScale(600, 600, 1)
@@ -82,7 +83,7 @@ final class WorldRenderer {
     }
 
     private func buildMaterials(device: MTLDevice?) {
-        let asphaltN = Res.image("asphalt_n_2k.jpg")
+        let asphaltN = Res.texture("asphalt_n_2k.jpg", srgb: false)
         func road(_ tex: String) -> SCNMaterial {
             let m = WorldRenderer.pbr(tex: tex, rough: 0.82)
             if let asphaltN { WorldRenderer.prop(m.normal, asphaltN); m.normal.intensity = 0.5 }
@@ -91,7 +92,7 @@ final class WorldRenderer {
         func facade(_ n: String) -> SCNMaterial {
             let glassy = n.contains("glass") || n.contains("office")
             let m = WorldRenderer.pbr(tex: n + "_2k.jpg", rough: glassy ? 0.3 : 0.6, metal: glassy ? 0.35 : 0)
-            if let em = Res.image(n + "_em.jpg") { WorldRenderer.prop(m.emission, em); m.emission.intensity = 0 }
+            if let em = Res.texture(n + "_em.jpg") { WorldRenderer.prop(m.emission, em); m.emission.intensity = 0 }
             facadeMats.append(m)
             return m
         }
@@ -139,7 +140,7 @@ final class WorldRenderer {
         m.roughness.contents = NSNumber(value: 0.95)
         m.metalness.contents = NSNumber(value: 0)
         func p(_ f: String) -> SCNMaterialProperty {
-            let pr = SCNMaterialProperty(contents: Res.image(f) ?? UIColor.gray)
+            let pr = SCNMaterialProperty(contents: Res.texture(f) ?? UIColor.gray)
             pr.wrapS = .repeat; pr.wrapT = .repeat; pr.mipFilter = .linear; pr.maxAnisotropy = 8
             return pr
         }

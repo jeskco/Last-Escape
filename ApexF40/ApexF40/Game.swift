@@ -101,6 +101,7 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
 
     func attach(_ v: SCNView) {
         guard view == nil else { return }
+        CrashLog.step("attach view")
         view = v
         v.scene = scene
         v.delegate = self
@@ -140,9 +141,12 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
         let device = v.device
         DispatchQueue.global(qos: .userInitiated).async {
             do {
+                CrashLog.step("load world data")
                 let w = try WorldData()
+                CrashLog.step("world data ok: \(w.meta.chunks.count) chunks")
                 self.progress(0.35, "Building materials…")
                 let r = WorldRenderer(meta: w.meta, device: device)
+                CrashLog.step("materials ok")
                 r.view = v
                 self.progress(0.5, "Loading the Ferrari F40…")
                 self.loadModels { hi, lo in
@@ -164,13 +168,18 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
             if finished { return }
             if status == .complete, let asset {
                 finished = true
-                let src = GLTFSCNSceneSource(asset: asset)
-                let holder = SCNNode()
-                for c in src.defaultScene?.rootNode.childNodes ?? [] { holder.addChildNode(c) }
-                done(holder)
+                DispatchQueue.main.async {
+                    CrashLog.step("glb parsed: \(name)")
+                    let src = GLTFSCNSceneSource(asset: asset)
+                    let holder = SCNNode()
+                    for c in src.defaultScene?.rootNode.childNodes ?? [] { holder.addChildNode(c) }
+                    CrashLog.step("glb scene ok: \(name)")
+                    done(holder)
+                }
             } else if status == .error || error != nil {
                 finished = true
-                done(nil)
+                CrashLog.step("glb failed: \(name) \(error?.localizedDescription ?? "")")
+                DispatchQueue.main.async { done(nil) }
             }
         }
     }
@@ -183,12 +192,14 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
     }
 
     private func finishSetup(world w: WorldData, renderer r: WorldRenderer, hi: SCNNode?, lo: SCNNode?) {
+        CrashLog.step("finish setup")
         world = w
         worldRenderer = r
         scene.rootNode.addChildNode(r.root)
         guard let hi else { errorText = "Couldn't load the car model."; return }
         CarRig.prepareTemplate(hi)
         carTemplate = hi
+        CrashLog.step("player rig")
         let rg = CarRig(template: hi, lite: false)
         scene.rootNode.addChildNode(rg.root)
         rig = rg
@@ -196,7 +207,9 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
         if let lo {
             CarRig.prepareTemplate(lo)
             trafficTemplate = lo
+            CrashLog.step("traffic lanes")
             let t = Traffic(meta: w.meta, template: lo)
+            CrashLog.step("traffic ok: \(t.lanes.count) lanes")
             scene.rootNode.addChildNode(t.root)
             traffic = t
         }
@@ -204,10 +217,12 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
         loadProgress = 1
         let sp = min(max(settings.spawn, 0), w.meta.spawns.count - 1)
         placeAt(spawn: sp)
-        ready = true
-        phase = .menu
+        CrashLog.step("audio")
         audio.volume = Float(settings.volume)
         audio.start()
+        CrashLog.step("ready")
+        ready = true
+        phase = .menu
     }
 
     func applyPaint() {
@@ -308,8 +323,11 @@ final class Game: NSObject, ObservableObject, SCNSceneRendererDelegate {
         frame(dt, w)
     }
 
+    private var frameCount = 0
     private func frame(_ dt: Float, _ w: WorldData) {
         time += dt
+        frameCount += 1
+        if frameCount == 1 || frameCount == 60 || frameCount == 600 { CrashLog.step("frame \(frameCount)") }
         if let p = pendingPlace { pendingPlace = nil; doPlace(x: p.x, z: p.y, heading: p.z) }
         if pendingReset { pendingReset = false; performReset() }
         let s = settings

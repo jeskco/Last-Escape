@@ -1,6 +1,7 @@
 import Foundation
 import simd
 import UIKit
+import MetalKit
 
 // MARK: - World description (world.json written by the world builder)
 
@@ -78,6 +79,26 @@ enum Res {
         let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
         return Bundle.main.url(forResource: base, withExtension: ext, subdirectory: dir)
     }
+    static var device: MTLDevice?
+    private static var cache: [String: Any] = [:]
+    private static let cacheLock = NSLock()
+
+    /// GPU texture with mipmaps straight from the file (no CPU-side bitmap kept around); falls back to UIImage.
+    static func texture(_ name: String, srgb: Bool = true) -> Any? {
+        let key = name + (srgb ? "" : "#lin")
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let c = cache[key] { return c }
+        guard let u = url(name, "Textures") else { return nil }
+        var out: Any? = nil
+        if let device, let t = try? MTKTextureLoader(device: device).newTexture(URL: u, options: [.SRGB: srgb, .generateMipmaps: true]) {
+            out = t
+        } else {
+            out = UIImage(contentsOfFile: u.path)
+        }
+        cache[key] = out
+        return out
+    }
+
     static func image(_ name: String, _ dir: String = "Textures") -> UIImage? {
         guard let u = url(name, dir) else { return nil }
         return UIImage(contentsOfFile: u.path)
