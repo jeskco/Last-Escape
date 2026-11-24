@@ -38,6 +38,7 @@
         <string>org.khronos.gltf.binary</string>
         <string>org.khronos.gltf</string>
         <string>com.autodesk.fbx</string>
+        <string>public.zip-archive</string>
       </array>
     </dict>
   </array>

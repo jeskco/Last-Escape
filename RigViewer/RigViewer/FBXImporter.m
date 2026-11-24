@@ -37,7 +37,15 @@ static UIColor *Color3(ufbx_vec3 c, double a) {
     if ((self = [super init])) {
         _dir = dir; _imageCache = [NSMutableDictionary new]; _materialCache = [NSMutableDictionary new]; _missing = [NSMutableSet new];
         NSMutableArray *files = [NSMutableArray new];
-        NSDirectoryEnumerator *e = [[NSFileManager defaultManager] enumeratorAtURL:dir includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
+        // Search the whole imported folder (e.g. an unzipped archive with textures in a sibling folder).
+        NSURL *root = dir;
+        for (int up = 0; up < 4; up++) {
+            NSURL *parent = root.URLByDeletingLastPathComponent;
+            if ([parent.lastPathComponent isEqualToString:@"Recents"] || [parent.path isEqualToString:root.path]) break;
+            root = parent;
+        }
+        if (![root.URLByDeletingLastPathComponent.lastPathComponent isEqualToString:@"Recents"]) root = dir;
+        NSDirectoryEnumerator *e = [[NSFileManager defaultManager] enumeratorAtURL:root includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
         for (NSURL *u in e) { [files addObject:u]; if (files.count > 4000) break; }
         _dirFiles = files;
     }

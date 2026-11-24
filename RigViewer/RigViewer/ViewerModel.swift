@@ -168,31 +168,94 @@ final class ViewerModel: ObservableObject {
 
     // MARK: - opening files
 
-    /// Copies picked / shared files into the app (so they stay available as recents) and opens the model among them.
+    /// Copies picked / shared files into the app (so they stay available as recents), unpacks ZIPs,
+    /// checks the files are complete, then opens the best model among them.
     func importFiles(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
+        isLoading = true; loadingText = urls.count == 1 ? "Importing \(urls[0].lastPathComponent)" : "Importing \(urls.count) files"
+        let dir = Self.recentsDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Self.prepareImport(urls, into: dir)
+            Task { @MainActor in
+                switch result {
+                case .failure(let message):
+                    try? FileManager.default.removeItem(at: dir)
+                    self.fail(message)
+                case .success(let main):
+                    self.open(url: main, remember: dir)
+                }
+            }
+        }
+    }
+
+    enum ImportResult { case success(URL), failure(String) }
+
+    nonisolated static func prepareImport(_ urls: [URL], into dir: URL) -> ImportResult {
         let fm = FileManager.default
-        let id = UUID().uuidString
-        let dir = Self.recentsDir.appendingPathComponent(id, isDirectory: true)
-        do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) } catch { showToast("Couldn’t prepare storage: \(error.localizedDescription)"); return }
-        var copied: [URL] = []
+        do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) } catch { return .failure("Couldn’t prepare storage: \(error.localizedDescription)") }
+        var problems: [String] = []
         for u in urls {
             let scoped = u.startAccessingSecurityScopedResource()
             defer { if scoped { u.stopAccessingSecurityScopedResource() } }
             let dest = dir.appendingPathComponent(u.lastPathComponent)
-            do { if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }; try fm.copyItem(at: u, to: dest); copied.append(dest) } catch { continue }
+            // A coordinated read makes iCloud Drive / Google Drive / Dropbox finish downloading the real file first.
+            var coordError: NSError?
+            var copyError: Error?
+            NSFileCoordinator().coordinate(readingItemAt: u, options: [.withoutChanges], error: &coordError) { readable in
+                do { if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }; try fm.copyItem(at: readable, to: dest) } catch { copyError = error }
+            }
+            if let e = coordError ?? (copyError as NSError?) { problems.append("\(u.lastPathComponent): \(e.localizedDescription)"); continue }
+            if dest.pathExtension.lowercased() == "zip" {
+                do { _ = try ZipReader.extract(dest, to: dir.appendingPathComponent(dest.deletingPathExtension().lastPathComponent, isDirectory: true)); try? fm.removeItem(at: dest) }
+                catch { problems.append("\(u.lastPathComponent): \(error.localizedDescription)") }
+            }
         }
-        let order = ["glb", "gltf", "usdz", "usd", "usdc", "usda", "dae", "fbx", "obj", "abc", "scn", "stl", "ply"]
-        let models = copied.filter { ModelFormats.all.contains($0.pathExtension.lowercased()) }
-            .sorted { (order.firstIndex(of: $0.pathExtension.lowercased()) ?? 99) < (order.firstIndex(of: $1.pathExtension.lowercased()) ?? 99) }
+
+        var models: [URL] = []
+        if let e = fm.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) {
+            for case let f as URL in e where ModelFormats.all.contains(f.pathExtension.lowercased()) && !f.path.contains("__MACOSX") { models.append(f) }
+        }
+        let order = ["glb", "gltf", "fbx", "usdz", "usd", "usdc", "usda", "dae", "obj", "abc", "scn", "stl", "ply"]
+        models.sort {
+            let a = order.firstIndex(of: $0.pathExtension.lowercased()) ?? 99, b = order.firstIndex(of: $1.pathExtension.lowercased()) ?? 99
+            return a != b ? a < b : $0.pathComponents.count < $1.pathComponents.count
+        }
         guard let main = models.first else {
-            try? fm.removeItem(at: dir)
-            let ext = urls.first?.pathExtension.lowercased() ?? ""
-            _ = ext
-            showToast("Rig Viewer opens FBX, USDZ, USD, glTF/GLB, OBJ, STL, PLY, Collada, Alembic and SceneKit files.")
-            return
+            if let p = problems.first { return .failure("Couldn’t import \(p)") }
+            return .failure("No 3D model found. Rig Viewer opens FBX, glTF/GLB, USDZ, OBJ, STL, PLY, Collada, Alembic and SceneKit files, and ZIPs containing them.")
         }
-        open(url: main, remember: dir)
+        if let problem = checkComplete(main) { return .failure(problem) }
+        return .success(main)
+    }
+
+    /// Catches empty or partially-downloaded files before a loader reports something cryptic.
+    nonisolated static func checkComplete(_ url: URL) -> String? {
+        let name = url.lastPathComponent
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size == 0 { return "“\(name)” is empty (0 bytes). It probably didn’t finish downloading — open it once in the Files app to download it, then try again." }
+        if url.pathExtension.lowercased() == "glb", let h = try? FileHandle(forReadingFrom: url) {
+            defer { try? h.close() }
+            let head = h.readData(ofLength: 12)
+            if head.count < 12 || head.prefix(4) != Data("glTF".utf8) {
+                return "“\(name)” isn’t a real GLB file (it may be a web page or a renamed file). Download it again from the original site."
+            }
+            let declared = Int(head[8]) | Int(head[9]) << 8 | Int(head[10]) << 16 | Int(head[11]) << 24
+            if declared > size {
+                return "“\(name)” is incomplete: it has \(Fmt.bytes(Double(size))) of \(Fmt.bytes(Double(declared))). It didn’t finish downloading — download it again, or open it once in Files first."
+            }
+        }
+        return nil
+    }
+
+    /// Turns loader errors into something a person can act on.
+    nonisolated static func friendly(_ error: Error?, name: String) -> String {
+        let text = error?.localizedDescription ?? ""
+        if text.contains("too short") { return "“\(name)” is incomplete or damaged — part of the file is missing. Download it again and re-open it." }
+        if text.lowercased().contains("not found") || text.lowercased().contains("no such file") {
+            return "“\(name)” refers to files that weren’t included (like a .bin or textures). Select them together, or open the ZIP it came in."
+        }
+        if text.contains("unknown format") || text.contains("invalid") { return "“\(name)” isn’t a valid glTF file. Try re-exporting it." }
+        return "Couldn’t open “\(name)”. \(text)"
     }
 
     func open(url: URL, displayName: String? = nil, remember dir: URL? = nil) {
@@ -209,7 +272,7 @@ final class ViewerModel: ObservableObject {
                         self.install(scene: scn, gltfAnimations: source.animations, extraClips: [], url: url, format: "glTF", name: name, bytes: bytes)
                         if let dir { self.saveRecent(dir: dir, main: url) }
                     } else if status == .error || error != nil {
-                        self.fail("Couldn’t open “\(name)”. \(error?.localizedDescription ?? "")")
+                        self.fail(Self.friendly(error, name: name))
                     }
                 }
             }
@@ -616,7 +679,7 @@ final class ViewerModel: ObservableObject {
         toastTask?.cancel()
         withAnimation(.spring(duration: 0.45, bounce: 0.3)) { toast = msg }
         toastTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(min(9.0, max(3.5, Double(msg.count) / 14.0)) * 1_000_000_000))
             if !Task.isCancelled { withAnimation(.easeOut(duration: 0.3)) { self.toast = nil } }
         }
     }
