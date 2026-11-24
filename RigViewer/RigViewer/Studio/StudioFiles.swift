@@ -16,6 +16,7 @@ extension StudioModel {
     var projectDir: URL { Self.projectsDir.appendingPathComponent(projectID, isDirectory: true) }
 
     var hasSavableContent: Bool { objects.contains { !$0.isImported } }
+    var isSavedProject: Bool { FileManager.default.fileExists(atPath: projectDir.appendingPathComponent("project.json").path) }
 
     /// Saves editable shapes (imported models stay in the viewer) plus a thumbnail.
     func saveProject() {

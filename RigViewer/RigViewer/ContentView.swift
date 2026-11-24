@@ -20,12 +20,14 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var studioSession: StudioSession?
     @State private var pendingStudio: StudioModel?
+    @State private var returnHome = false
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
     @State private var detent: Detent = AppSettings.shared.startExpanded ? .medium : .peek
     @State private var drag: CGFloat = 0
     @State private var sheetTotal: CGFloat = 800
+    @State private var dragVertical: Bool?
     @State private var snapshot: SnapshotItem?
     @AppStorage("accentIndex") private var accentIndex = 0
 
@@ -95,7 +97,7 @@ struct ContentView: View {
         .preferredColorScheme(settings.colorScheme)
         .fullScreenCover(isPresented: $showLibrary, onDismiss: {
             // Present Studio only once the library has fully gone, otherwise UIKit ignores the second cover.
-            if let s = pendingStudio { pendingStudio = nil; studioSession = StudioSession(model: s) }
+            if let s = pendingStudio { pendingStudio = nil; studioSession = StudioSession(model: s, fromLibrary: true) }
         }) {
             LibraryView(model: model, isPresented: $showLibrary,
                         onNewModel: { pendingStudio = StudioModel(); showLibrary = false },
@@ -104,8 +106,12 @@ struct ContentView: View {
         }
         // item-based so the cover always receives the session it was opened with (an isPresented cover
         // can capture a stale nil on its first presentation, which is why Studio used to need a second tap).
-        .fullScreenCover(item: $studioSession) { session in
-            StudioView(model: session.model, onDone: finishStudio).tint(accent).preferredColorScheme(settings.colorScheme)
+        .fullScreenCover(item: $studioSession, onDismiss: {
+            // Projects started from Home go back Home when you're done.
+            if returnHome { returnHome = false; showLibrary = true }
+        }) { session in
+            StudioView(model: session.model, savesAsProject: session.fromLibrary) { finishStudio(session) }
+                .tint(accent).preferredColorScheme(settings.colorScheme)
         }
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
@@ -115,7 +121,7 @@ struct ContentView: View {
     // MARK: Studio
 
     private func startStudio(_ s: StudioModel) {
-        if showLibrary { pendingStudio = s; showLibrary = false } else { studioSession = StudioSession(model: s) }
+        if showLibrary { pendingStudio = s; showLibrary = false } else { studioSession = StudioSession(model: s, fromLibrary: true) }
     }
 
     /// Moves the current model into Studio for posing, animating or editing.
@@ -123,10 +129,18 @@ struct ContentView: View {
         let lent = model.lendToStudio()
         let s = StudioModel()
         s.importLent(nodes: lent.nodes, name: lent.name.isEmpty ? "Model" : lent.name)
-        studioSession = StudioSession(model: s)
+        studioSession = StudioSession(model: s, fromLibrary: false)
     }
 
-    private func finishStudio(_ s: StudioModel) {
+    private func finishStudio(_ session: StudioSession) {
+        let s = session.model
+        if session.fromLibrary {
+            // Saving (or not) was decided in Studio; go back to Home.
+            s.detach()
+            returnHome = true
+            studioSession = nil
+            return
+        }
         if s.hasSavableContent && s.dirty { s.saveProject() }
         let scene = s.makeViewerScene()
         s.detach()
@@ -187,12 +201,13 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             if !landscape {
                 Capsule().fill(Color.primary.opacity(0.28)).frame(width: 38, height: 5).padding(.top, 7)
-                    .frame(maxWidth: .infinity).contentShape(Rectangle())
+                    .frame(maxWidth: .infinity).frame(height: 12, alignment: .top).contentShape(Rectangle().inset(by: -10))
                     .highPriorityGesture(sheetDrag)
             }
             header(landscape: landscape)
             if expanded {
                 PillTabs(items: InspectorTab.allCases.map { ($0, $0.icon, $0.rawValue) }, selection: $tab)
+                    .simultaneousGesture(sheetDrag, including: landscape ? .subviews : .all)
                     .padding(.horizontal, 9).padding(.bottom, 8)
                 ScrollView {
                     InspectorContent(model: model, tab: tab, accentIndex: $accentIndex,
@@ -204,6 +219,9 @@ struct ContentView: View {
                         .padding(.horizontal, 12).padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
+                // Below full height the content moves the whole panel (like Maps); at full height it scrolls.
+                .scrollDisabled(!landscape && detent != .large)
+                .simultaneousGesture(sheetDrag, including: (!landscape && detent != .large) ? .all : .subviews)
                 .id(tab)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -291,9 +309,17 @@ struct ContentView: View {
     }
 
     private var sheetDrag: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { v in drag = v.translation.height }
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
+            .onChanged { v in
+                // Decide once per drag whether it's vertical; sideways drags (sliders, tabs) are left alone.
+                if dragVertical == nil { dragVertical = abs(v.translation.height) > abs(v.translation.width) }
+                guard dragVertical == true else { return }
+                var t = Transaction(); t.disablesAnimations = true
+                withTransaction(t) { drag = v.translation.height }
+            }
             .onEnded { v in
+                defer { dragVertical = nil }
+                guard dragVertical == true else { return }
                 let total = sheetTotal
                 let base = dockHeight(total: total)
                 let projected = base - v.predictedEndTranslation.height
@@ -375,4 +401,6 @@ struct SnapshotSheet: View {
 struct StudioSession: Identifiable {
     let id = UUID()
     let model: StudioModel
+    /// Started from Home (a new model or a saved project) rather than "Edit in Studio" from the viewer.
+    var fromLibrary: Bool
 }

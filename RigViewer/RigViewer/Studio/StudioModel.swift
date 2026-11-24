@@ -57,6 +57,8 @@ final class StudioModel: ObservableObject {
     private var directStart: SIMD3<Float>?
     private var lastSnapKey: SIMD3<Int32>?
     private var rotateTurns: Float = 0
+    private var lastDetent = 0
+    @Published var dragReadout: String?
     private var lastRingAngle: Float = 0
     var paintStrokeActive = false
 
@@ -644,28 +646,46 @@ final class StudioModel: ObservableObject {
         let colors: [UIColor] = [.systemRed, .systemGreen, .systemBlue]
         func mat(_ c: UIColor) -> SCNMaterial { let m = SCNMaterial(); m.lightingModel = .constant; m.diffuse.contents = c; m.readsFromDepthBuffer = false; m.writesToDepthBuffer = false; return m }
         let kind: GizmoKind = (mode == .pose && gizmoKind == .scale) ? GizmoKind.rotate : gizmoKind
+        // While dragging, the active handle glows and the others fade back.
+        var active: Int? = nil
+        if case .axis(let i)? = dragHandle { active = i }
+        func tint(_ i: Int, _ c: UIColor) -> UIColor {
+            guard let active else { return c }
+            return i == active ? c.withAlphaComponent(1) : c.withAlphaComponent(0.18)
+        }
         for i in 0..<3 {
             let axisNode = SCNNode()
+            let col = tint(i, colors[i])
             switch kind {
             case .move, .scale:
-                let shaft = SCNCylinder(radius: 0.012, height: 0.8); shaft.materials = [mat(colors[i])]
+                let shaft = SCNCylinder(radius: active == i ? 0.02 : 0.013, height: 0.8); shaft.materials = [mat(col)]
                 let sn = SCNNode(geometry: shaft); sn.position.y = 0.4
                 let tipGeo: SCNGeometry
-                if kind == .move { tipGeo = SCNCone(topRadius: 0, bottomRadius: 0.05, height: 0.16) }
-                else { tipGeo = SCNBox(width: 0.09, height: 0.09, length: 0.09, chamferRadius: 0.01) }
-                tipGeo.materials = [mat(colors[i])]
+                if kind == .move { tipGeo = SCNCone(topRadius: 0, bottomRadius: 0.06, height: 0.18) }
+                else { tipGeo = SCNBox(width: 0.1, height: 0.1, length: 0.1, chamferRadius: 0.015) }
+                tipGeo.materials = [mat(col)]
                 let tn = SCNNode(geometry: tipGeo); tn.position.y = 0.88
                 axisNode.addChildNode(sn); axisNode.addChildNode(tn)
                 if i == 0 { axisNode.eulerAngles.z = -.pi / 2 } else if i == 2 { axisNode.eulerAngles.x = .pi / 2 }
             case .rotate:
-                let ring = SCNTorus(ringRadius: 0.8, pipeRadius: 0.012); ring.materials = [mat(colors[i])]
+                let ring = SCNTorus(ringRadius: 0.8, pipeRadius: active == i ? 0.034 : 0.022); ring.ringSegmentCount = 72; ring.materials = [mat(col)]
                 axisNode.geometry = ring
                 if i == 0 { axisNode.eulerAngles.z = .pi / 2 } else if i == 2 { axisNode.eulerAngles.x = .pi / 2 }
             }
             axisNode.enumerateHierarchy { n, _ in n.renderingOrder = 3000 + i; n.categoryBitMask = Self.helperMask }
             gizmo.addChildNode(axisNode)
         }
-        let c = SCNSphere(radius: kind == .rotate ? 0.07 : 0.06); c.materials = [mat(UIColor.white.withAlphaComponent(0.9))]
+        if kind == .rotate {
+            // Outer white ring: spin around the direction you're looking (Blender's view ring).
+            let holder = SCNNode(); holder.constraints = [SCNBillboardConstraint()]
+            let ring = SCNTorus(ringRadius: 1.0, pipeRadius: active == 3 ? 0.026 : 0.016); ring.ringSegmentCount = 72
+            ring.materials = [mat(tint(3, UIColor.white.withAlphaComponent(0.85)))]
+            let rn = SCNNode(geometry: ring); rn.eulerAngles.x = .pi / 2
+            holder.addChildNode(rn)
+            holder.enumerateHierarchy { n, _ in n.renderingOrder = 3003; n.categoryBitMask = Self.helperMask }
+            gizmo.addChildNode(holder)
+        }
+        let c = SCNSphere(radius: kind == .rotate ? 0.07 : 0.065); c.materials = [mat(UIColor.white.withAlphaComponent(active == nil ? 0.9 : 0.35))]
         let cn = SCNNode(geometry: c); cn.renderingOrder = 3010; cn.categoryBitMask = Self.helperMask
         gizmo.addChildNode(cn)
         updateGizmo()
@@ -729,6 +749,12 @@ final class StudioModel: ObservableObject {
         if simd_length(tp - c) < 34 { return .center }
         let kind: GizmoKind = (mode == .pose && gizmoKind == .scale) ? GizmoKind.rotate : gizmoKind
         var best: (Handle, Float)? = nil
+        if kind == .rotate {
+            let edge = project(piv + cameraNode.simdWorldRight * s * 1.0)
+            let rScreen = simd_length(SIMD2(edge.x, edge.y) - c)
+            let d = abs(simd_length(tp - c) - rScreen)
+            if d < 20 { best = (.axis(3), d) }
+        }
         for i in 0..<3 {
             var d: Float = .greatestFiniteMagnitude
             if kind == .rotate {
@@ -764,6 +790,9 @@ final class StudioModel: ObservableObject {
         dragHandle = h; dragStart = p; startPivot = piv
         lastSnapKey = nil
         if h == .direct { directStart = floorPoint(p, y: directGrabY) }
+        lastDetent = 0
+        Haptics.tap(.medium)
+        if case .axis = h { buildGizmo() }
         let c = project(piv); dragStartAngle = atan2f(Float(p.y) - c.y, Float(p.x) - c.x)
         switch mode {
         case .object:
@@ -798,6 +827,8 @@ final class StudioModel: ObservableObject {
             applyMove(delta)
         case (.rotate, .direct):
             var yaw = Float(t.x) * 0.011, tilt = Float(t.y) * 0.011
+            if !snapping { detentTick(yaw * 180 / .pi, every: 15) }
+            readout("↻ \(Int((yaw * 180 / .pi).rounded()))°")
             if snapping { let st = Float.pi / 12; yaw = (yaw / st).rounded() * st; tilt = (tilt / st).rounded() * st; snapTick(SIMD3(yaw, tilt, 0)) }
             applyRotate(simd_quatf(angle: yaw, axis: [0, 1, 0]) * simd_quatf(angle: tilt, axis: camRight))
         case (.scale, .direct):
@@ -812,7 +843,8 @@ final class StudioModel: ObservableObject {
             let along = axisDelta(i, translation: t)
             let v = snapping ? (along / 0.1).rounded() * 0.1 : along
             if snapping { snapTick(SIMD3(v, 0, 0)) }
-            applyMove(axes[i] * v)
+            readout(String(format: "%@ %+.2f", ["X", "Y", "Z"][min(i, 2)], v))
+            applyMove(axes[min(i, 2)] * v)
         case (.rotate, .center):
             let q = simd_quatf(angle: Float(t.x) * 0.012, axis: camUp) * simd_quatf(angle: Float(t.y) * 0.012, axis: camRight)
             applyRotate(q)
@@ -821,18 +853,23 @@ final class StudioModel: ObservableObject {
             let a = atan2f(Float(p.y) - c.y, Float(p.x) - c.x)
             var ang = a - dragStartAngle
             let toCam = cameraNode.simdWorldPosition - piv
-            if simd_dot(axes[i], toCam) > 0 { ang = -ang }
+            let ax: SIMD3<Float> = i < 3 ? axes[i] : simd_normalize(toCam)
+            if simd_dot(ax, toCam) > 0 { ang = -ang }
             while ang > .pi { ang -= 2 * .pi }; while ang < -.pi { ang += 2 * .pi }
             ang += rotateTurns
             if abs(ang - lastRingAngle) > .pi { rotateTurns += ang > lastRingAngle ? -2 * .pi : 2 * .pi; ang += ang > lastRingAngle ? -2 * .pi : 2 * .pi }
             lastRingAngle = ang
             if snapping { let step = Float.pi / 12; ang = (ang / step).rounded() * step; snapTick(SIMD3(ang, 0, 0)) }
-            applyRotate(simd_quatf(angle: ang, axis: axes[i]))
+            else { detentTick(ang * 180 / .pi, every: 15) }
+            readout("\(["X", "Y", "Z", "View"][i]) \(Int((ang * 180 / .pi).rounded()))°")
+            applyRotate(simd_quatf(angle: ang, axis: ax))
         case (.scale, .center):
             applyScale(SIMD3(repeating: expf(-Float(t.y) / 160)))
         case (.scale, .axis(let i)):
-            let along = axisDelta(i, translation: t)
-            var f = SIMD3<Float>(repeating: 1); f[i] = max(0.01, expf(along / max(gizmoScale, 1e-4)))
+            let j = min(i, 2)
+            let along = axisDelta(j, translation: t)
+            var f = SIMD3<Float>(repeating: 1); f[j] = max(0.01, expf(along / max(gizmoScale, 1e-4)))
+            readout(String(format: "%@ ×%.2f", ["X", "Y", "Z"][j], f[j]))
             applyScale(f)
         }
     }
@@ -840,8 +877,11 @@ final class StudioModel: ObservableObject {
     func dragEnded() {
         if mode == .sculpt { sculptEnded(); return }
         if mode == .paint { paintEnded(); return }
+        let wasAxis: Bool = { if case .axis? = dragHandle { return true }; return false }()
         dragHandle = nil
         directStart = nil; rotateTurns = 0; lastRingAngle = 0
+        if dragReadout != nil { dragReadout = nil }
+        if wasAxis { buildGizmo() }
         startBone = nil
         touch()
         refreshOverlay()
@@ -1293,7 +1333,7 @@ final class StudioModel: ObservableObject {
 
     private func easeGoals(_ dt: Float) {
         guard !goals.isEmpty else { return }
-        let k = dt <= 0 ? 1 : 1 - expf(-dt * 26)
+        let k = dt <= 0 ? 1 : 1 - expf(-dt * 34)
         for (id, g) in goals {
             guard let o = objects.first(where: { $0.id == id }) else { goals[id] = nil; continue }
             let n = o.node
@@ -1313,6 +1353,14 @@ final class StudioModel: ObservableObject {
         for (id, g) in goals { if let o = objects.first(where: { $0.id == id }) { o.node.simdPosition = g.p; o.node.simdOrientation = g.q; o.node.simdScale = g.s } }
         goals = [:]
     }
+
+    /// A light tick every `every` units (degrees) as you rotate, even without snapping.
+    private func detentTick(_ value: Float, every: Float) {
+        let d = Int((value / every).rounded(.towardZero))
+        if d != lastDetent { lastDetent = d; Haptics.select() }
+    }
+
+    private func readout(_ text: String) { if dragReadout != text { dragReadout = text } }
 
     private func snapTick(_ v: SIMD3<Float>) {
         let key = SIMD3<Int32>(Int32((v.x * 1000).rounded()), Int32((v.y * 1000).rounded()), Int32((v.z * 1000).rounded()))

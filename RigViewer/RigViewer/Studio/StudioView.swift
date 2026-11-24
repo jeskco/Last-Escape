@@ -7,7 +7,9 @@ enum EditCategory: String, CaseIterable, Identifiable { case select = "Select", 
 struct StudioView: View {
     @ObservedObject var model: StudioModel
     /// Called when the person taps Done: hands the result to the viewer.
-    var onDone: (StudioModel) -> Void
+    /// True for models made from Home: Done asks to save new work, then returns Home.
+    var savesAsProject = false
+    var onDone: () -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var showProperties = false
     @State private var propertiesTab: PropertiesTab = .object
@@ -23,6 +25,7 @@ struct StudioView: View {
     @State private var objectCategory: ObjectCategory = .transform
     @State private var editCategory: EditCategory = .select
     @State private var lastOpOpen = true
+    @State private var askSave = false
     @Namespace private var modeNS
     @Namespace private var chipNS
 
@@ -33,13 +36,21 @@ struct StudioView: View {
 
             VStack(spacing: 10) {
                 topBar
-                hint
+                if let r = model.dragReadout {
+                    Text(r).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit()
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .glass(Capsule())
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                } else {
+                    hint
+                }
                 Spacer(minLength: 0)
                 if let op = model.lastOp { lastOpPanel(op).id(op.title) }
                 bottomArea
             }
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
             .animation(Theme.spring, value: model.lastOp?.title)
+            .animation(Theme.snappy, value: model.dragReadout == nil)
             .animation(Theme.spring, value: model.mode)
 
             if let t = model.toast {
@@ -64,6 +75,13 @@ struct StudioView: View {
         .sheet(isPresented: $showBones) { BonePickerView(model: model).presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showAdd) { AddObjectSheet(model: model).presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showRender) { RenderSheet(model: model).presentationDetents([.large]) }
+        .confirmationDialog("Save “\(model.projectName)”?", isPresented: $askSave, titleVisibility: .visible) {
+            Button("Save Project") { model.saveProject(); Haptics.tap(.medium); onDone() }
+            Button("Save & Export…") { model.saveProject(); showExport = true }
+            Button("Save & Render Image…") { model.saveProject(); showRender = true }
+            Button("Don't Save", role: .destructive) { model.dirty = false; onDone() }
+            Button("Keep Editing", role: .cancel) {}
+        } message: { Text("This model hasn't been saved yet.") }
         .alert("Rename Model", isPresented: $renaming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) {}
@@ -77,6 +95,18 @@ struct StudioView: View {
     }
 
     private func openProperties(_ tab: PropertiesTab) { propertiesTab = tab; showProperties = true }
+
+    /// ✓ button: new unsaved work asks first; saved projects save their changes and leave.
+    private func finish() {
+        Haptics.tap()
+        guard savesAsProject, model.hasSavableContent else { onDone(); return }
+        if model.isSavedProject {
+            if model.dirty { model.saveProject(); model.showToast("Saved") }
+            onDone()
+        } else {
+            askSave = true
+        }
+    }
 
     // MARK: keyboard shortcuts (iPad / Mac keyboards), Blender-style
 
@@ -121,7 +151,7 @@ struct StudioView: View {
     private var topBar: some View {
         GlassGroup(spacing: 8) {
             HStack(spacing: 8) {
-                Button { onDone(model) } label: {
+                Button { finish() } label: {
                     Image(systemName: "checkmark").font(.system(size: 16, weight: .heavy)).foregroundStyle(.white)
                         .frame(width: 44, height: 44).contentShape(Circle())
                 }
