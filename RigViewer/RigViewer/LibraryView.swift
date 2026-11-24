@@ -25,7 +25,10 @@ struct FillImage: View {
 struct LibraryView: View {
     @ObservedObject var model: ViewerModel
     @Binding var isPresented: Bool
+    var onNewModel: () -> Void = {}
+    var onOpenProject: (String) -> Void = { _ in }
     @State private var showSettings = false
+    @State private var projects: [StudioProjectSummary] = []
 
     private func bundled(_ name: String) -> UIImage? {
         Bundle.main.url(forResource: name, withExtension: "jpg").flatMap { UIImage(contentsOfFile: $0.path) }
@@ -37,6 +40,7 @@ struct LibraryView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 30) {
                     openCard.padding(.horizontal, 20)
+                    create
                     if !model.recents.isEmpty { recents }
                     samples
                     formats.padding(.horizontal, 20)
@@ -44,6 +48,7 @@ struct LibraryView: View {
                 .padding(.top, 6).padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
+            .onAppear { projects = StudioModel.listProjects() }
             .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Rig Viewer")
             .sheet(isPresented: $showSettings) { SettingsView(model: model) }
@@ -90,6 +95,46 @@ struct LibraryView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .shadow(color: Color.accentColor.opacity(0.25), radius: 20, y: 10)
+    }
+
+    // MARK: create (Studio)
+    private var create: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header("Create")
+            ScrollView(.horizontal) {
+                HStack(spacing: 14) {
+                    Button(action: onNewModel) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Image(systemName: "plus").font(.system(size: 26, weight: .semibold)).foregroundStyle(.tint)
+                                .frame(width: 128, height: 128)
+                                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.accentColor.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                            Text("New 3D Model").font(.footnote.weight(.semibold))
+                            Text("Model, sculpt, export").font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .frame(width: 128, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(projects) { p in
+                        Button { onOpenProject(p.id) } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                FillImage(image: p.thumbnail).frame(width: 128, height: 128)
+                                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                Text(p.name).font(.footnote.weight(.semibold)).lineLimit(1)
+                                Text("\(p.objectCount) \(p.objectCount == 1 ? "object" : "objects") · \(p.date.formatted(.relative(presentation: .named)))").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(width: 128, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Delete Project", systemImage: "trash", role: .destructive) { StudioModel.deleteProject(p.id); projects = StudioModel.listProjects() }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollIndicators(.hidden)
+        }
     }
 
     private func header(_ title: String, trailing: (String, () -> Void)? = nil) -> some View {

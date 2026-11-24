@@ -401,6 +401,51 @@ final class ViewerModel: ObservableObject {
         isLoading = false
     }
 
+    // MARK: - Studio handoff
+
+    struct LentModel { let nodes: [SCNNode]; let rootPlayers: [(String, SCNAnimationPlayer)]; let clips: [ClipInfo]; let name: String }
+    private(set) var lent: LentModel?
+
+    /// Gives the current model to Studio (it's moved, not copied, so rigs and animations stay intact).
+    func lendToStudio() -> LentModel {
+        clips.forEach { $0.players.forEach { $0.stop() } }
+        selectedBone = nil
+        boneMarker?.removeFromParentNode(); boneMarker = nil
+        if shading != .lit { shading = .lit }
+        if channelView != .final { channelView = .final }
+        showAllParts()
+        if zUp { zUpSilently(false) }
+        var rootPlayers: [(String, SCNAnimationPlayer)] = []
+        for k in scene.rootNode.animationKeys {
+            if let p = scene.rootNode.animationPlayer(forKey: k) { rootPlayers.append((k, p)) }
+            scene.rootNode.removeAnimation(forKey: k)
+        }
+        let nodes = topNodes
+        nodes.forEach { $0.removeFromParentNode() }
+        topNodes = []
+        let l = LentModel(nodes: nodes, rootPlayers: rootPlayers, clips: clips, name: (stats.name as NSString).deletingPathExtension)
+        lent = l
+        return l
+    }
+
+    /// Shows whatever Studio produced (the edited model, new shapes, saved animations).
+    func receiveFromStudio(scene scn: SCNScene?, newClips: [ClipInfo], name: String) {
+        let l = lent; lent = nil
+        guard let scn else {
+            // Studio was emptied: put back the lent model if there was one, else keep a clean stage.
+            if let l {
+                let back = SCNScene(); l.nodes.forEach { back.rootNode.addChildNode($0) }
+                for (k, p) in l.rootPlayers { back.rootNode.addAnimationPlayer(p, forKey: k) }
+                install(scene: back, gltfAnimations: [], extraClips: l.clips, url: sourceURL, format: stats.format, name: stats.name, bytes: stats.fileBytes)
+            }
+            return
+        }
+        for (k, p) in l?.rootPlayers ?? [] { scn.rootNode.addAnimationPlayer(p, forKey: k); p.stop() }
+        let clips = (l?.clips ?? []) + newClips
+        install(scene: scn, gltfAnimations: [], extraClips: clips, url: nil, format: l == nil ? "Studio" : "Studio · \(stats.format)", name: name, bytes: 0)
+        if !newClips.isEmpty, let i = self.clips.firstIndex(where: { $0.id == newClips.last!.id }) { play(i) }
+    }
+
     // MARK: - settings
 
     private func observeSettings() {
@@ -782,6 +827,19 @@ final class ViewerModel: ObservableObject {
         }
         guard let img else { return nil }
         return UIGraphicsImageRenderer(size: CGSize(width: 88, height: 88)).image { _ in img.draw(in: CGRect(x: 0, y: 0, width: 88, height: 88)) }
+    }
+
+    /// Full-size image from any SceneKit material contents (image, file URL, path or Model I/O texture).
+    static func thumbnailFull(_ contents: Any?) -> UIImage? {
+        switch contents {
+        case let i as UIImage: return i
+        case let u as URL: return UIImage(contentsOfFile: u.path)
+        case let s as String: return UIImage(contentsOfFile: s) ?? UIImage(named: s)
+        case let t as MDLTexture: return t.imageFromTexture().map { UIImage(cgImage: $0.takeUnretainedValue()) }
+        default:
+            if let c = contents, CFGetTypeID(c as CFTypeRef) == CGImage.typeID { return UIImage(cgImage: c as! CGImage) }
+            return nil
+        }
     }
 
     static func squareThumb(_ img: UIImage) -> UIImage? {

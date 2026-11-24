@@ -9,6 +9,7 @@ struct InspectorContent: View {
     var onSnapshot: () -> Void
     var onAR: () -> Void
     var onSettings: () -> Void
+    var onStudio: () -> Void
 
     var body: some View {
         switch tab {
@@ -17,7 +18,7 @@ struct InspectorContent: View {
         case .clips: ClipsTab(model: model)
         case .bones: BonesTab(model: model)
         case .look: LookTab(model: model)
-        case .view: ViewTab(model: model, accentIndex: $accentIndex, onFullScreen: onFullScreen, onSnapshot: onSnapshot, onAR: onAR, onSettings: onSettings)
+        case .view: ViewTab(model: model, accentIndex: $accentIndex, onFullScreen: onFullScreen, onSnapshot: onSnapshot, onAR: onAR, onSettings: onSettings, onStudio: onStudio)
         }
     }
 }
@@ -291,9 +292,25 @@ struct ViewTab: View {
     var onSnapshot: () -> Void
     var onAR: () -> Void
     var onSettings: () -> Void
+    var onStudio: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
+            Button(action: onStudio) {
+                HStack(spacing: 12) {
+                    Image(systemName: "cube.transparent.fill").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 46, height: 46).background(LinearGradient(colors: [.accentColor, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Edit in Studio").font(.headline)
+                        Text("Pose, animate, sculpt and edit this model").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(.tertiary)
+                }
+                .padding(12)
+                .background(Color(uiColor: .secondarySystemBackground).opacity(0.62), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .buttonStyle(.plain)
             HStack(spacing: 8) {
                 ActionButton(icon: "arkit", title: "View in AR", action: onAR)
                 ActionButton(icon: "camera.aperture", title: "Snapshot", action: onSnapshot)

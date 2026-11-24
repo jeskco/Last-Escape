@@ -12,6 +12,8 @@ struct ContentView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var showLibrary = AppSettings.shared.libraryOnLaunch
     @State private var showSettings = false
+    @State private var showStudio = false
+    @State private var studio: StudioModel?
     @State private var immersive = false
     @State private var showExit = false
     @State private var tab: InspectorTab = .info
@@ -82,10 +84,42 @@ struct ContentView: View {
         }
         .tint(accent)
         .preferredColorScheme(settings.colorScheme)
-        .fullScreenCover(isPresented: $showLibrary) { LibraryView(model: model, isPresented: $showLibrary).tint(accent).preferredColorScheme(settings.colorScheme) }
+        .fullScreenCover(isPresented: $showLibrary) {
+            LibraryView(model: model, isPresented: $showLibrary,
+                        onNewModel: { showLibrary = false; startStudio(StudioModel()) },
+                        onOpenProject: { id in if let s = StudioModel.open(projectID: id) { showLibrary = false; startStudio(s) } })
+                .tint(accent).preferredColorScheme(settings.colorScheme)
+        }
+        .fullScreenCover(isPresented: $showStudio) {
+            if let studio { StudioView(model: studio, onDone: finishStudio).tint(accent).preferredColorScheme(settings.colorScheme) }
+        }
         .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         .sheet(item: $snapshot) { SnapshotSheet(image: $0.image).tint(accent) }
         .onOpenURL { url in showLibrary = false; model.importFiles([url]) }
+    }
+
+    // MARK: Studio
+
+    private func startStudio(_ s: StudioModel) {
+        studio = s
+        Task { @MainActor in try? await Task.sleep(nanoseconds: 350_000_000); showStudio = true }
+    }
+
+    /// Moves the current model into Studio for posing, animating or editing.
+    private func editInStudio() {
+        let lent = model.lendToStudio()
+        let s = StudioModel()
+        s.importLent(nodes: lent.nodes, name: lent.name.isEmpty ? "Model" : lent.name)
+        studio = s; showStudio = true
+    }
+
+    private func finishStudio(_ s: StudioModel) {
+        if s.hasSavableContent && s.dirty { s.saveProject() }
+        let scene = s.makeViewerScene()
+        s.detach()
+        model.receiveFromStudio(scene: scene, newClips: s.savedClips, name: s.projectName)
+        showStudio = false
+        Task { @MainActor in try? await Task.sleep(nanoseconds: 600_000_000); studio = nil }
     }
 
     private func singleTap() {
@@ -148,7 +182,8 @@ struct ContentView: View {
                                      onFullScreen: enterFullScreen,
                                      onSnapshot: { if let img = model.snapshot() { snapshot = SnapshotItem(image: img) } },
                                      onAR: openAR,
-                                     onSettings: { showSettings = true })
+                                     onSettings: { showSettings = true },
+                                     onStudio: editInStudio)
                         .padding(.horizontal, 12).padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)

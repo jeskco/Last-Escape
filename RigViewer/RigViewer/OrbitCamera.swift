@@ -31,6 +31,9 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
     private var lastPinchCenter: CGPoint?
 
     var autoRotate = false
+    /// Return false to let another one-finger gesture (gizmo, sculpt) take the touch instead of orbiting.
+    var allowOneFingerOrbit: ((CGPoint) -> Bool)?
+    private var gestures: [UIGestureRecognizer] = []
 
     init(node: SCNNode) { self.node = node; super.init() }
 
@@ -51,12 +54,26 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
             g.cancelsTouchesInView = false
             view.addGestureRecognizer(g)
         }
+        gestures = [orbit, pan, pinch, twist]
 
         link?.invalidate()
         let l = CADisplayLink(target: self, selector: #selector(step(_:)))
         l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         l.add(to: .main, forMode: .common)
         link = l
+    }
+
+    func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if let p = g as? UIPanGestureRecognizer, p.maximumNumberOfTouches == 1, let allow = allowOneFingerOrbit, let v = view {
+            return allow(p.location(in: v))
+        }
+        return true
+    }
+
+    func detach() {
+        link?.invalidate(); link = nil
+        if let v = view { gestures.forEach { v.removeGestureRecognizer($0) } }
+        gestures = []
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
