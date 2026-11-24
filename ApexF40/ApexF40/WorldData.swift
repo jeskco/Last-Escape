@@ -92,9 +92,10 @@ final class Heightfield {
 
     init(data d: Data) {
         nx = Int(d.i32(0)); nz = Int(d.i32(4)); x0 = d.f32(8); z0 = d.f32(12); cell = d.f32(16)
-        var arr = [Float](repeating: 0, count: nx * nz)
+        let n = Int(d.i32(0)) * Int(d.i32(4))
+        var arr = [Float](repeating: 0, count: n)
         d.withUnsafeBytes { raw in
-            for k in 0..<(nx * nz) { arr[k] = Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 24 + k * 4, as: UInt32.self))) }
+            for k in 0..<n { arr[k] = Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 24 + k * 4, as: UInt32.self))) }
         }
         h = arr
     }
