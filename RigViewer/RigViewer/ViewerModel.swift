@@ -141,12 +141,12 @@ final class ViewerModel: ObservableObject {
 
     weak var view: SCNView?
     let cameraNode = SCNNode()
+    lazy var orbit = OrbitCamera(node: cameraNode)
     private let floorNode = SCNNode()
     private let sunNode = SCNNode()
     private var topNodes: [SCNNode] = []
     private var originalMaterials: [ObjectIdentifier: [SCNMaterial]] = [:]
     private var boneMarker: SCNNode?
-    private var turntableTimer: Timer?
     private var toastTask: Task<Void, Never>?
     private(set) var radius: Float = 1
 
@@ -398,26 +398,12 @@ final class ViewerModel: ObservableObject {
         let vHalf = Float(cam.fieldOfView) * .pi / 360
         let half = min(vHalf, atan(tan(vHalf) * aspect))
         let dist = b.radius / sin(half) * 1.15
-        let dir = simd_normalize(SIMD3<Float>(0.45, 0.2, 0.87))
-        cam.zNear = Double(dist / 300); cam.zFar = Double(dist * 60)
-        SCNTransaction.begin()
-        SCNTransaction.animationDuration = animated ? 0.6 : 0
-        SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        cameraNode.simdPosition = b.center + dir * dist
-        cameraNode.simdLook(at: b.center)
-        SCNTransaction.commit()
-        view?.defaultCameraController.target = SCNVector3(b.center)
+        orbit.frame(center: b.center, radius: b.radius, distance: dist, animated: animated)
         floorNode.simdPosition = SIMD3(0, b.minY, 0)
         if let light = sunNode.light { light.orthographicScale = CGFloat(b.radius * 1.6) }
     }
 
-    private func updateTurntable() {
-        turntableTimer?.invalidate(); turntableTimer = nil
-        guard turntable else { return }
-        turntableTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.view?.defaultCameraController.rotateBy(x: 0.35, y: 0) }
-        }
-    }
+    private func updateTurntable() { orbit.autoRotate = turntable }
 
     // MARK: - playback
 

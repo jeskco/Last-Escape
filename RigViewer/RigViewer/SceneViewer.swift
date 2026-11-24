@@ -12,18 +12,16 @@ struct SceneViewer: UIViewRepresentable {
     func makeUIView(context: Context) -> SCNView {
         let v = SCNView(frame: .zero, options: [SCNView.Option.preferredRenderingAPI.rawValue: SCNRenderingAPI.metal.rawValue])
         v.backgroundColor = .clear
-        v.allowsCameraControl = true
+        v.allowsCameraControl = false
         v.antialiasingMode = .multisampling4X
         v.rendersContinuously = true
         v.preferredFramesPerSecond = 120
         v.isJitteringEnabled = false
         v.scene = model.scene
         v.pointOfView = model.cameraNode
-        v.defaultCameraController.interactionMode = .orbitTurntable
-        v.defaultCameraController.inertiaEnabled = true
-        v.defaultCameraController.inertiaFriction = 0.08
+        model.orbit.attach(to: v)
         let dbl = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTap)); dbl.numberOfTapsRequired = 2
-        let sgl = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap)); sgl.require(toFail: dbl)
+        let sgl = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap)); sgl.require(toFail: dbl); dbl.delaysTouchesEnded = false
         v.addGestureRecognizer(dbl); v.addGestureRecognizer(sgl)
         model.view = v
         Task { @MainActor in model.frame(animated: false) }
