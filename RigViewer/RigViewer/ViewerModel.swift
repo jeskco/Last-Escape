@@ -31,6 +31,7 @@ struct MaterialInfo: Identifiable {
     let textures: [TextureInfo]
     let thumbnail: UIImage?
     let color: UIColor
+    var material: SCNMaterial? = nil
 }
 
 struct ModelStats {
@@ -140,6 +141,14 @@ final class ViewerModel: ObservableObject {
     @Published var loadingText = ""
     @Published var toast: String? = nil
 
+    // Scene outliner
+    @Published private(set) var parts: [PartInfo] = []
+    @Published private(set) var hiddenParts: Set<ObjectIdentifier> = []
+    @Published private(set) var hiddenMaterials: Set<ObjectIdentifier> = []
+    @Published var groupMode: PartGrouping = .smart
+    @Published private(set) var disabledChannels: Set<TextureChannel> = []
+    @Published var channelView: ChannelView = .final { didSet { applyShading() } }
+
     weak var view: SCNView?
     let cameraNode = SCNNode()
     lazy var orbit = OrbitCamera(node: cameraNode)
@@ -151,6 +160,18 @@ final class ViewerModel: ObservableObject {
     private var toastTask: Task<Void, Never>?
     private(set) var radius: Float = 1
     private var settingsSinks = Set<AnyCancellable>()
+    private var channelSnapshot: [ObjectIdentifier: [TextureChannel: Any]] = [:]
+    private var transparencySnapshot: [ObjectIdentifier: CGFloat] = [:]
+    private static let checker: UIImage = {
+        let n = 8, cell: CGFloat = 32
+        return UIGraphicsImageRenderer(size: CGSize(width: CGFloat(n) * cell, height: CGFloat(n) * cell)).image { ctx in
+            for y in 0..<n { for x in 0..<n {
+                let hue = CGFloat((x + y * n) % 12) / 12
+                (((x + y) % 2 == 0) ? UIColor(hue: hue, saturation: 0.55, brightness: 0.95, alpha: 1) : UIColor(white: 0.12, alpha: 1)).setFill()
+                ctx.fill(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
+            } }
+        }
+    }()
     private let settings = AppSettings.shared
 
     init() {
@@ -368,7 +389,10 @@ final class ViewerModel: ObservableObject {
         view?.scene = scn
         view?.pointOfView = cameraNode
         stats = ModelStats(name: name, format: format, fileBytes: bytes)
-        computeStats(); collectBones(); collectMaterials()
+        hiddenParts = []; hiddenMaterials = []; disabledChannels = []; channelSnapshot = [:]
+        if channelView != .final { channelView = .final }
+        forEachModelGeometryNode { n in if let g = n.geometry { self.originalMaterials[ObjectIdentifier(g)] = g.materials } }
+        computeStats(); collectBones(); collectMaterials(); collectParts()
         applyEnvironment()
         currentClip = nil
         isPlaying = settings.autoplay
@@ -492,6 +516,10 @@ final class ViewerModel: ObservableObject {
             let key = ObjectIdentifier(g)
             if originalMaterials[key] == nil { originalMaterials[key] = g.materials }
             let originals = originalMaterials[key] ?? []
+            if channelView != .final {
+                g.materials = originals.map { self.channelMaterial(from: $0) }
+                return
+            }
             switch shading {
             case .lit: g.materials = originals
             case .clay:
@@ -611,7 +639,7 @@ final class ViewerModel: ObservableObject {
                     if slot == "Color" { thumb = Self.thumbnail(prop.contents) }
                 }
                 let color = (m.diffuse.contents as? UIColor) ?? .systemGray3
-                out.append(MaterialInfo(name: m.name ?? "Material \(out.count + 1)", model: Self.lightingName(m.lightingModel), textures: texs, thumbnail: thumb, color: color))
+                out.append(MaterialInfo(name: m.name ?? "Material \(out.count + 1)", model: Self.lightingName(m.lightingModel), textures: texs, thumbnail: thumb, color: color, material: m))
             }
         }
         materials = out; stats.materials = out.count; stats.textures = texCount; stats.textureBytes = texBytes
@@ -788,4 +816,271 @@ final class ViewerModel: ObservableObject {
             }
         }
     }()
+}
+
+
+// MARK: - Scene outliner: parts, smart groups, texture channels
+
+struct PartInfo: Identifiable, Hashable {
+    let node: SCNNode
+    let name: String
+    let triangles: Int
+    let materialName: String
+    let topName: String
+    var id: ObjectIdentifier { ObjectIdentifier(node) }
+    static func == (a: PartInfo, b: PartInfo) -> Bool { a.id == b.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
+struct PartGroup: Identifiable {
+    let id: String
+    let name: String
+    let icon: String
+    let color: Color
+    let parts: [PartInfo]
+    var triangles: Int { parts.reduce(0) { $0 + $1.triangles } }
+}
+
+enum PartGrouping: String, CaseIterable, Identifiable {
+    case smart = "Smart", material = "Material", hierarchy = "Hierarchy"
+    var id: String { rawValue }
+}
+
+enum TextureChannel: String, CaseIterable, Identifiable {
+    case color = "Base Colour", normal = "Normal", roughness = "Roughness", metalness = "Metalness", emission = "Emission", occlusion = "Ambient Occlusion"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .color: return "paintpalette.fill"; case .normal: return "circle.hexagongrid.fill"; case .roughness: return "circle.dotted"
+        case .metalness: return "sparkle"; case .emission: return "lightbulb.fill"; case .occlusion: return "circle.lefthalf.filled"
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .color: return .orange; case .normal: return .indigo; case .roughness: return .gray
+        case .metalness: return .teal; case .emission: return .yellow; case .occlusion: return .brown
+        }
+    }
+    func property(_ m: SCNMaterial) -> SCNMaterialProperty {
+        switch self {
+        case .color: return m.diffuse; case .normal: return m.normal; case .roughness: return m.roughness
+        case .metalness: return m.metalness; case .emission: return m.emission; case .occlusion: return m.ambientOcclusion
+        }
+    }
+    /// What the property shows when the channel is switched off.
+    var neutral: Any? {
+        switch self {
+        case .color: return UIColor(white: 0.78, alpha: 1); case .normal: return nil; case .roughness: return NSNumber(value: 0.55)
+        case .metalness: return NSNumber(value: 0.0); case .emission: return UIColor.black; case .occlusion: return nil
+        }
+    }
+}
+
+enum ChannelView: String, CaseIterable, Identifiable {
+    case final = "Final", color = "Colour", normal = "Normal", roughness = "Rough", metalness = "Metal", occlusion = "AO", emission = "Emissive", uv = "UV Grid"
+    var id: String { rawValue }
+    var channel: TextureChannel? {
+        switch self {
+        case .color: return .color; case .normal: return .normal; case .roughness: return .roughness; case .metalness: return .metalness
+        case .occlusion: return .occlusion; case .emission: return .emission; default: return nil
+        }
+    }
+}
+
+/// Keyword rules for smart grouping, checked in order (more specific first).
+private let smartRules: [(id: String, name: String, icon: String, color: Color, words: [String])] = [
+    ("weapons", "Weapons", "scope", .red, ["gun", "rifle", "pistol", "weapon", "sword", "knife", "blade", "shield", "bow", "arrow", "ammo", "magazine", "scope", "barrel", "trigger", "muzzle", "grenade", "axe", "spear", "katana", "handgun", "shotgun", "smg"]),
+    ("hair", "Hair & Fur", "comb.fill", .brown, ["hair", "beard", "mustache", "moustache", "fur", "bang", "ponytail", "brow", "eyebrow", "lash", "eyelash", "scalp"]),
+    ("face", "Head & Face", "face.smiling", .pink, ["head", "face", "eye", "iris", "pupil", "cornea", "teeth", "tooth", "tongue", "mouth", "jaw", "ear", "nose", "lip", "cheek", "skull", "eyelayer"]),
+    ("armor", "Armour & Gear", "shield.lefthalf.filled", .indigo, ["armor", "armour", "helmet", "visor", "plate", "pad", "kneepad", "elbowpad", "strap", "holster", "backpack", "bag", "pouch", "harness", "gear", "tactical", "mask", "respirator"]),
+    ("accessories", "Accessories", "eyeglasses", .purple, ["glass", "goggle", "hat", "cap", "beanie", "hood", "watch", "ring", "necklace", "earring", "jewel", "bracelet", "chain", "badge", "scarf", "headphone", "accessor", "pin", "tie"]),
+    ("clothing", "Clothing", "tshirt.fill", .blue, ["cloth", "shirt", "tshirt", "pant", "trouser", "jean", "short", "jacket", "coat", "hoodie", "sweater", "vest", "top", "bottom", "dress", "skirt", "suit", "uniform", "shoe", "boot", "sneaker", "sock", "glove", "belt", "outfit", "sleeve", "collar", "cape", "robe"]),
+    ("body", "Body", "figure.stand", .orange, ["body", "skin", "torso", "chest", "arm", "leg", "hand", "finger", "foot", "feet", "toe", "neck", "hip", "spine", "shoulder", "base", "naked", "nude", "mesh_body", "geo_body"]),
+    ("vehicle", "Vehicle", "car.fill", .teal, ["wheel", "tire", "tyre", "car", "door", "window", "windshield", "engine", "chassis", "hull", "wing", "seat", "steering"]),
+    ("environment", "Environment", "tree.fill", .green, ["ground", "floor", "terrain", "grass", "tree", "leaf", "leaves", "rock", "stone", "wall", "building", "roof", "plant", "water", "sky"]),
+]
+
+extension ViewerModel {
+
+    private static func tokens(_ s: String) -> String {
+        // Split camelCase and separators so "CPD_EyeLayer" -> "cpd eye layer" but keep the raw lowercase too.
+        var out = ""
+        for (i, ch) in s.enumerated() {
+            if ch.isUppercase, i > 0 { out.append(" ") }
+            out.append(ch.isLetter || ch.isNumber ? Character(ch.lowercased()) : " ")
+        }
+        return " " + out + " " + s.lowercased() + " "
+    }
+
+    fileprivate func collectParts() {
+        var out: [PartInfo] = []
+        var counter = 0
+        for top in topNodes {
+            top.enumerateHierarchy { n, _ in
+                guard let g = n.geometry, !(n.name ?? "").hasPrefix("RigViewer.") else { return }
+                counter += 1
+                var tris = 0
+                for e in g.elements where [.triangles, .triangleStrip, .polygon].contains(e.primitiveType) { tris += e.primitiveCount }
+                var name = n.name ?? ""
+                if name.isEmpty || name.hasPrefix("joint:") { name = g.name ?? "" }
+                if name.isEmpty { name = "Part \(counter)" }
+                // Name the hierarchy group after the highest named ancestor below the scene root.
+                var a: SCNNode = n
+                while let p = a.parent, p.parent != nil, !(p.name ?? "").isEmpty, p.name != "FBX Root" { a = p }
+                out.append(PartInfo(node: n, name: name, triangles: tris,
+                                    materialName: g.firstMaterial?.name ?? "Default",
+                                    topName: (a === n ? (n.parent?.name ?? "Scene") : (a.name ?? "Scene"))))
+            }
+        }
+        parts = out
+    }
+
+    /// Groups parts by the current mode. Smart mode reads part, material and parent names.
+    var partGroups: [PartGroup] {
+        switch groupMode {
+        case .material:
+            let d = Dictionary(grouping: parts, by: { $0.materialName })
+            return d.keys.sorted().map { PartGroup(id: "m-\($0)", name: $0, icon: "paintpalette.fill", color: .orange, parts: d[$0]!) }
+        case .hierarchy:
+            let d = Dictionary(grouping: parts, by: { $0.topName })
+            return d.keys.sorted().map { PartGroup(id: "h-\($0)", name: $0, icon: "list.bullet.indent", color: .blue, parts: d[$0]!) }
+        case .smart:
+            var buckets: [String: [PartInfo]] = [:]
+            for p in parts {
+                let text = Self.tokens(p.name) + Self.tokens(p.materialName) + Self.tokens(p.node.parent?.name ?? "")
+                let rule = smartRules.first { r in r.words.contains { w in text.contains(" \(w)") || text.contains("\(w) ") || text.contains("_\(w)") } }
+                buckets[rule?.id ?? "other", default: []].append(p)
+            }
+            var groups: [PartGroup] = smartRules.compactMap { r in
+                buckets[r.id].map { PartGroup(id: r.id, name: r.name, icon: r.icon, color: r.color, parts: $0) }
+            }
+            if let o = buckets["other"] { groups.append(PartGroup(id: "other", name: groups.isEmpty ? "Model" : "Other Parts", icon: "cube.fill", color: .gray, parts: o)) }
+            return groups
+        }
+    }
+
+    // MARK: visibility
+
+    func isVisible(_ p: PartInfo) -> Bool { !hiddenParts.contains(p.id) }
+
+    func setVisible(_ p: PartInfo, _ visible: Bool) {
+        p.node.isHidden = !visible
+        if visible { hiddenParts.remove(p.id) } else { hiddenParts.insert(p.id) }
+    }
+
+    func setVisible(_ g: PartGroup, _ visible: Bool) {
+        var h = hiddenParts
+        for p in g.parts { p.node.isHidden = !visible; if visible { h.remove(p.id) } else { h.insert(p.id) } }
+        hiddenParts = h
+    }
+
+    func solo(_ g: PartGroup) {
+        let keep = Set(g.parts.map(\.id))
+        var h = Set<ObjectIdentifier>()
+        for p in parts { let hide = !keep.contains(p.id); p.node.isHidden = hide; if hide { h.insert(p.id) } }
+        hiddenParts = h
+        showToast("Showing only \(g.name)")
+    }
+
+    func solo(_ p: PartInfo) { solo(PartGroup(id: "solo", name: p.name, icon: "", color: .clear, parts: [p])) }
+
+    func showAllParts() { parts.forEach { $0.node.isHidden = false }; hiddenParts = [] }
+    func hideAllParts() { parts.forEach { $0.node.isHidden = true }; hiddenParts = Set(parts.map(\.id)) }
+
+    /// Moves the camera to frame just these parts, keeping the current viewing angle.
+    func focus(_ ps: [PartInfo]) {
+        var mn = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var mx = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        for p in ps {
+            let (a, b) = p.node.boundingBox
+            for i in 0..<8 {
+                let c = SIMD3<Float>(i & 1 == 0 ? Float(a.x) : Float(b.x), i & 2 == 0 ? Float(a.y) : Float(b.y), i & 4 == 0 ? Float(a.z) : Float(b.z))
+                let w = p.node.simdConvertPosition(c, to: nil); mn = simd_min(mn, w); mx = simd_max(mx, w)
+            }
+        }
+        guard mn.x <= mx.x else { return }
+        let r = max(simd_length(mx - mn) / 2, radius * 0.02)
+        let half = Float(fov) * .pi / 360
+        orbit.focus(center: (mn + mx) / 2, radius: r, distance: r / sinf(half) * 1.2)
+    }
+
+    // MARK: materials
+
+    func isVisible(_ m: MaterialInfo) -> Bool { m.material.map { !hiddenMaterials.contains(ObjectIdentifier($0)) } ?? true }
+
+    func setVisible(_ info: MaterialInfo, _ visible: Bool) {
+        guard let m = info.material else { return }
+        let key = ObjectIdentifier(m)
+        if transparencySnapshot[key] == nil { transparencySnapshot[key] = m.transparency }
+        m.transparency = visible ? (transparencySnapshot[key] ?? 1) : 0
+        m.writesToDepthBuffer = visible
+        if visible { hiddenMaterials.remove(key) } else { hiddenMaterials.insert(key) }
+        if shading != .lit || channelView != .final { applyShading() }
+    }
+
+    // MARK: texture channels
+
+    private var litMaterials: [SCNMaterial] {
+        var seen = Set<ObjectIdentifier>(); var out: [SCNMaterial] = []
+        for list in originalMaterials.values { for m in list where !seen.contains(ObjectIdentifier(m)) { seen.insert(ObjectIdentifier(m)); out.append(m) } }
+        return out
+    }
+
+    /// How many materials actually use an image for this channel.
+    func textureCount(_ c: TextureChannel) -> Int {
+        litMaterials.filter { m in
+            let contents = channelSnapshot[ObjectIdentifier(m)]?[c] ?? c.property(m).contents
+            return Self.imageSize(contents) != nil
+        }.count
+    }
+
+    func isEnabled(_ c: TextureChannel) -> Bool { !disabledChannels.contains(c) }
+
+    func setChannel(_ c: TextureChannel, enabled: Bool) {
+        for m in litMaterials {
+            let key = ObjectIdentifier(m)
+            var snap = channelSnapshot[key] ?? [:]
+            if snap[c] == nil { snap[c] = c.property(m).contents ?? NSNull() }
+            channelSnapshot[key] = snap
+            let original = snap[c] is NSNull ? nil : snap[c]
+            c.property(m).contents = enabled ? original : c.neutral
+        }
+        if enabled { disabledChannels.remove(c) } else { disabledChannels.insert(c) }
+        if shading != .lit || channelView != .final { applyShading() }
+    }
+
+    func resetChannels() { for c in TextureChannel.allCases where !isEnabled(c) { setChannel(c, enabled: true) } }
+
+    /// Unlit material that shows a single texture map (or a UV grid) so it can be inspected on the model.
+    fileprivate func channelMaterial(from o: SCNMaterial) -> SCNMaterial {
+        let m = SCNMaterial()
+        m.lightingModel = .constant
+        m.isDoubleSided = o.isDoubleSided
+        m.transparency = hiddenMaterials.contains(ObjectIdentifier(o)) ? 0 : 1
+        if channelView == .uv {
+            m.diffuse.contents = Self.checker
+            m.diffuse.wrapS = .repeat; m.diffuse.wrapT = .repeat
+            m.diffuse.contentsTransform = SCNMatrix4MakeScale(6, 6, 1)
+            m.diffuse.magnificationFilter = .nearest
+            return m
+        }
+        guard let c = channelView.channel else { return m }
+        let original = channelSnapshot[ObjectIdentifier(o)]?[c] ?? c.property(o).contents
+        let src = c.property(o)
+        switch original {
+        case let n as NSNumber: m.diffuse.contents = UIColor(white: CGFloat(truncating: n), alpha: 1)
+        case is NSNull, nil:
+            m.diffuse.contents = c == .normal ? UIColor(red: 0.5, green: 0.5, blue: 1, alpha: 1) : c == .occlusion ? UIColor.white : UIColor(white: 0.15, alpha: 1)
+        default: m.diffuse.contents = original
+        }
+        m.diffuse.contentsTransform = src.contentsTransform
+        m.diffuse.wrapS = src.wrapS; m.diffuse.wrapT = src.wrapT
+        m.diffuse.mappingChannel = src.mappingChannel
+        if c == .roughness || c == .metalness || c == .occlusion {
+            // glTF packs these into one ORM image; show the matching colour channel as greyscale.
+            m.diffuse.textureComponents = c == .roughness ? .green : c == .metalness ? .blue : .red
+            if Self.imageSize(original) == nil { m.diffuse.textureComponents = .all }
+        }
+        return m
+    }
 }

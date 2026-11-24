@@ -13,7 +13,7 @@ struct InspectorContent: View {
     var body: some View {
         switch tab {
         case .info: InfoTab(model: model)
-        case .scene: MaterialsTab(model: model)
+        case .scene: SceneTab(model: model)
         case .clips: ClipsTab(model: model)
         case .bones: BonesTab(model: model)
         case .look: LookTab(model: model)

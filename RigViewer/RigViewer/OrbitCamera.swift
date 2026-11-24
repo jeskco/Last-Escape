@@ -86,6 +86,14 @@ final class OrbitCamera: NSObject, UIGestureRecognizerDelegate {
         apply()
     }
 
+    /// Glides to a new centre and distance without changing the viewing angle (used to focus on a part).
+    func focus(center: SIMD3<Float>, radius: Float, distance d: Float) {
+        minDistance = min(minDistance, max(radius, 0.0005) * 0.15)
+        target = center; distance = max(minDistance, min(maxDistance, d))
+        yawVelocity = 0; pitchVelocity = 0; panVelocity = .zero
+        glide = true
+    }
+
     // MARK: gestures
 
     private var sensitivity: Float {
