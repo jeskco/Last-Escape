@@ -225,7 +225,12 @@ struct TransformRecord: Codable {
 final class StudioObject: Identifiable {
     let id: UUID
     var name: String
-    var mesh: EditMesh?
+    var mesh: EditMesh? { didSet { meshVersion &+= 1 } }
+    /// Bumped whenever the mesh changes, so undo only rebuilds what actually changed.
+    var meshVersion = 0
+    /// Parts that came from one model share a group: tapping one selects the whole model.
+    var groupID: UUID?
+    var groupName: String?
     var material: MaterialRecord
     var textureImage: UIImage?
     let node: SCNNode
@@ -251,6 +256,9 @@ struct ObjectRecord: Codable {
     var hidden: Bool
     var modifiers: [ModifierRecord]? = nil
     var light: LightRecord? = nil
+    var groupID: UUID? = nil
+    var groupName: String? = nil
+    var meshVersion: Int? = nil
 }
 
 struct StudioProjectFile: Codable {

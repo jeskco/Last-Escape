@@ -28,6 +28,8 @@ struct StudioView: View {
     @State private var askSave = false
     @Namespace private var modeNS
     @Namespace private var chipNS
+    /// True when the tools live in the landscape sidebar.
+    @State private var verticalTools = false
 
     var body: some View {
         ZStack {
@@ -35,6 +37,7 @@ struct StudioView: View {
             StudioSceneView(model: model).ignoresSafeArea()
 
             GeometryReader { geo in
+                Group {
                 if geo.size.width > geo.size.height {
                     landscapeLayout(width: geo.size.width)
                 } else {
@@ -47,6 +50,9 @@ struct StudioView: View {
                     }
                     .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
                 }
+                }
+                .onAppear { verticalTools = geo.size.width > geo.size.height }
+                .onChange(of: geo.size) { _, sz in verticalTools = sz.width > sz.height }
             }
             .animation(Theme.spring, value: model.lastOp?.title)
             .animation(Theme.snappy, value: model.dragReadout == nil)
@@ -94,6 +100,9 @@ struct StudioView: View {
     }
 
     private func openProperties(_ tab: PropertiesTab) { propertiesTab = tab; showProperties = true }
+
+    /// Runs a mesh tool; on big meshes it shows "Working…" first so the app never looks frozen.
+    private func run(_ work: @escaping () -> Void) { model.perform(work) }
 
     /// ✓ button: new unsaved work asks first; saved projects save their changes and leave.
     private func finish() {
@@ -206,13 +215,7 @@ struct StudioView: View {
         }
     }
 
-    private var stats: String {
-        _ = model.revision
-        let meshes = model.objects.compactMap(\.mesh)
-        let tris = meshes.reduce(0) { $0 + $1.triangleCount }
-        let n = model.objects.count
-        return "\(n) \(n == 1 ? "object" : "objects")" + (tris > 0 ? " · \(Fmt.count(tris)) tris" : "")
-    }
+    private var stats: String { model.statsText }
 
     private func circle(_ icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -324,7 +327,7 @@ struct StudioView: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .glass(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 }
-                .frame(width: min(350, width * 0.38))
+                .frame(width: min(420, width * 0.42))
             }
         }
         .padding(.horizontal, 10).padding(.top, 2).padding(.bottom, 6)
@@ -373,12 +376,11 @@ struct StudioView: View {
     }
 
     private func chips<T: Hashable & Identifiable & RawRepresentable>(_ all: [T], _ sel: Binding<T>) -> some View where T.RawValue == String {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
+        ChipsContainer {
                 ForEach(all) { c in
                     let on = sel.wrappedValue == c
                     Button { withAnimation(Theme.snappy) { sel.wrappedValue = c }; Haptics.select() } label: {
-                        Text(c.rawValue).font(.caption.weight(.semibold)).fixedSize().padding(.horizontal, 12).frame(height: 30)
+                        Text(c.rawValue).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75).padding(.horizontal, 12).frame(maxWidth: verticalTools ? .infinity : nil).frame(height: 30)
                             .foregroundStyle(on ? Color.white : Color.primary)
                             .background {
                                 if on { Capsule().fill(Color.accentColor.gradient).matchedGeometryEffect(id: "chip", in: chipNS) }
@@ -387,28 +389,34 @@ struct StudioView: View {
                     }
                     .buttonStyle(.pressable(0.93))
                 }
-            }
         }
-        .scrollIndicators(.hidden)
     }
 
     // MARK: object tools
 
     private var objectTools: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Button { showAdd = true } label: {
-                    Label("Add", systemImage: "plus").font(.footnote.weight(.bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 30).background(Color.accentColor, in: Capsule())
-                }
-                .buttonStyle(.plain)
+            if verticalTools {
+                addButton.frame(maxWidth: .infinity)
                 chips(ObjectCategory.allCases, $objectCategory)
+            } else {
+                HStack(spacing: 8) {
+                    addButton
+                    chips(ObjectCategory.allCases, $objectCategory)
+                }
             }
             ToolStrip {
                 switch objectCategory {
                 case .transform:
-                    GizmoPicker(model: model)
+                    ForEach(GizmoKind.allCases) { k in
+                        ToolButton(icon: k.icon, title: k.rawValue, on: model.gizmoKind == k) { model.gizmoKind = k }
+                    }
                     ToolButton(icon: "checkmark.circle", title: "Multi", on: model.multiSelect) { model.multiSelect.toggle() }
+                    ToolButton(icon: "square.on.square.dashed", title: "Parts", on: model.selectParts) {
+                        model.selectParts.toggle()
+                        model.showToast(model.selectParts ? "Tap picks single parts" : "Tap picks the whole model")
+                    }
+                    ToolButton(icon: "checkmark.square", title: "Select All") { model.selectAll() }
                     ToolButton(icon: "ruler", title: "Snap", on: model.snapping) { model.snapping.toggle() }
                     ToolButton(icon: "slider.horizontal.3", title: "Numbers", enabled: !model.selection.isEmpty) { openProperties(.object) }
                     ToolButton(icon: "arrow.down.to.line", title: "To Floor", enabled: !model.selection.isEmpty) { model.dropToFloor() }
@@ -453,6 +461,14 @@ struct StudioView: View {
         }
     }
 
+    private var addButton: some View {
+        Button { showAdd = true } label: {
+            Label("Add", systemImage: "plus").font(.footnote.weight(.bold)).foregroundStyle(.white)
+                .padding(.horizontal, 14).frame(maxWidth: verticalTools ? .infinity : nil).frame(height: 32).background(Color.accentColor.gradient, in: Capsule())
+        }
+        .buttonStyle(.pressable)
+    }
+
     @ViewBuilder private var booleanMenu: some View {
         let sel = model.selectedObjects.filter { $0.mesh != nil }
         Menu {
@@ -472,15 +488,28 @@ struct StudioView: View {
 
     private var editTools: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
+            if verticalTools {
                 Picker("Select", selection: $model.selectMode) {
-                    ForEach(SelectMode.allCases) { Image(systemName: $0.icon).tag($0).accessibilityLabel($0.rawValue) }
+                    ForEach(SelectMode.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.segmented).frame(maxWidth: 124)
-                GizmoPicker(model: model, compact: true)
-                Spacer(minLength: 0)
-                SmallToggle(icon: "circle.dotted.circle", on: model.proportional) { model.proportional.toggle() }.accessibilityLabel("Proportional editing")
-                SmallToggle(icon: "checkmark.circle", on: model.multiSelect) { model.multiSelect.toggle() }.accessibilityLabel("Multi-select")
+                .pickerStyle(.segmented)
+                HStack(spacing: 8) {
+                    GizmoPicker(model: model, compact: true)
+                    Spacer(minLength: 0)
+                    SmallToggle(icon: "circle.dotted.circle", title: "Soft", on: model.proportional) { model.proportional.toggle() }.accessibilityLabel("Proportional editing")
+                    SmallToggle(icon: "checkmark.circle", on: model.multiSelect) { model.multiSelect.toggle() }.accessibilityLabel("Multi-select")
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Picker("Select", selection: $model.selectMode) {
+                        ForEach(SelectMode.allCases) { Image(systemName: $0.icon).tag($0).accessibilityLabel($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented).frame(maxWidth: 124)
+                    GizmoPicker(model: model, compact: true)
+                    Spacer(minLength: 0)
+                    SmallToggle(icon: "circle.dotted.circle", on: model.proportional) { model.proportional.toggle() }.accessibilityLabel("Proportional editing")
+                    SmallToggle(icon: "checkmark.circle", on: model.multiSelect) { model.multiSelect.toggle() }.accessibilityLabel("Multi-select")
+                }
             }
             if model.proportional {
                 LabeledSlider(icon: "circle.dotted.circle", value: $model.proportionalRadius, range: 0.05...2)
@@ -492,54 +521,54 @@ struct StudioView: View {
                     ToolButton(icon: "checkmark.square", title: "All") { model.selectAll() }
                     ToolButton(icon: "square", title: "None") { model.selectNone() }
                     ToolButton(icon: "arrow.left.arrow.right.square", title: "Invert") { model.invertSelection() }
-                    ToolButton(icon: "link", title: "Linked") { model.selectLinked() }
-                    ToolButton(icon: "plus.circle", title: "Grow") { model.growSelection(true) }
-                    ToolButton(icon: "minus.circle", title: "Shrink") { model.growSelection(false) }
-                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Edge Loop") { model.selectEdgeLoop() }
-                    ToolButton(icon: "circle.circle", title: "Edge Ring") { model.selectEdgeLoop(ring: true) }
+                    ToolButton(icon: "link", title: "Linked") { run { model.selectLinked() } }
+                    ToolButton(icon: "plus.circle", title: "Grow") { run { model.growSelection(true) } }
+                    ToolButton(icon: "minus.circle", title: "Shrink") { run { model.growSelection(false) } }
+                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Edge Loop") { run { model.selectEdgeLoop() } }
+                    ToolButton(icon: "circle.circle", title: "Edge Ring") { run { model.selectEdgeLoop(ring: true) } }
                 case .mesh:
                     Group {
-                    ToolButton(icon: "plus.square.on.square", title: "Duplicate") { model.duplicateEditSelection() }
-                    ToolButton(icon: "rectangle.split.2x1", title: "Separate") { model.separateSelection() }
-                    ToolButton(icon: "trash", title: "Delete", destructive: true) { model.deleteEditSelection() }
-                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { model.mergeSelection() }
+                    ToolButton(icon: "plus.square.on.square", title: "Duplicate") { run { model.duplicateEditSelection() } }
+                    ToolButton(icon: "rectangle.split.2x1", title: "Separate") { run { model.separateSelection() } }
+                    ToolButton(icon: "trash", title: "Delete", destructive: true) { run { model.deleteEditSelection() } }
+                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { run { model.mergeSelection() } }
                     Menu {
-                        Button("Smooth (Catmull–Clark)", systemImage: "circle.grid.cross") { model.subdivide(smooth: true) }
-                        Button("Simple", systemImage: "square.grid.2x2") { model.subdivide(smooth: false) }
+                        Button("Smooth (Catmull–Clark)", systemImage: "circle.grid.cross") { run { model.subdivide(smooth: true) } }
+                        Button("Simple", systemImage: "square.grid.2x2") { run { model.subdivide(smooth: false) } }
                     } label: { ToolLabel(icon: "square.grid.3x3", title: "Subdivide") }
-                    ToolButton(icon: "drop", title: "Smooth") { model.smoothSelection() }
+                    ToolButton(icon: "drop", title: "Smooth") { run { model.smoothSelection() } }
                     Menu {
-                        Button("Mirror X") { model.mirror(axis: 0) }
-                        Button("Mirror Y") { model.mirror(axis: 1) }
-                        Button("Mirror Z") { model.mirror(axis: 2) }
+                        Button("Mirror X") { run { model.mirror(axis: 0) } }
+                        Button("Mirror Y") { run { model.mirror(axis: 1) } }
+                        Button("Mirror Z") { run { model.mirror(axis: 2) } }
                     } label: { ToolLabel(icon: "arrow.left.and.right.righttriangle.left.righttriangle.right", title: "Mirror") }
                     }
                     Group {
-                    ToolButton(icon: "arrow.up.left.and.arrow.down.right", title: "Fatten") { model.shrinkFatten() }
-                    ToolButton(icon: "circle", title: "To Sphere") { model.toSphere() }
-                    ToolButton(icon: "dice", title: "Randomize") { model.randomize() }
-                    ToolButton(icon: "triangle", title: "Triangulate") { model.triangulate() }
-                    ToolButton(icon: "square", title: "Tris → Quads") { model.trisToQuads() }
+                    ToolButton(icon: "arrow.up.left.and.arrow.down.right", title: "Fatten") { run { model.shrinkFatten() } }
+                    ToolButton(icon: "circle", title: "To Sphere") { run { model.toSphere() } }
+                    ToolButton(icon: "dice", title: "Randomize") { run { model.randomize() } }
+                    ToolButton(icon: "triangle", title: "Triangulate") { run { model.triangulate() } }
+                    ToolButton(icon: "square", title: "Tris → Quads") { run { model.trisToQuads() } }
                     }
                 case .faces:
-                    ToolButton(icon: "square.stack.3d.up.fill", title: "Extrude", tint: .accentColor) { model.extrude() }
-                    ToolButton(icon: "square.inset.filled", title: "Inset") { model.inset() }
-                    ToolButton(icon: "square.on.square.squareshape.controlhandles", title: "Bevel") { model.bevel() }
-                    ToolButton(icon: "asterisk", title: "Poke") { model.poke() }
-                    ToolButton(icon: "square.dashed", title: "Make Face") { model.makeFace() }
-                    ToolButton(icon: "square.dashed.inset.filled", title: "Dissolve") { model.dissolve() }
+                    ToolButton(icon: "square.stack.3d.up.fill", title: "Extrude", tint: .accentColor) { run { model.extrude() } }
+                    ToolButton(icon: "square.inset.filled", title: "Inset") { run { model.inset() } }
+                    ToolButton(icon: "square.on.square.squareshape.controlhandles", title: "Bevel") { run { model.bevel() } }
+                    ToolButton(icon: "asterisk", title: "Poke") { run { model.poke() } }
+                    ToolButton(icon: "square.dashed", title: "Make Face") { run { model.makeFace() } }
+                    ToolButton(icon: "square.dashed.inset.filled", title: "Dissolve") { run { model.dissolve() } }
                 case .edges:
-                    ToolButton(icon: "scissors", title: "Loop Cut", tint: .accentColor) { model.loopCut() }
-                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Select Loop") { model.selectEdgeLoop() }
-                    ToolButton(icon: "circle.circle", title: "Select Ring") { model.selectEdgeLoop(ring: true) }
+                    ToolButton(icon: "scissors", title: "Loop Cut", tint: .accentColor) { run { model.loopCut() } }
+                    ToolButton(icon: "point.topleft.down.to.point.bottomright.curvepath", title: "Select Loop") { run { model.selectEdgeLoop() } }
+                    ToolButton(icon: "circle.circle", title: "Select Ring") { run { model.selectEdgeLoop(ring: true) } }
                     ToolButton(icon: "line.diagonal", title: "Dissolve") { if model.selectMode != .edge { model.selectMode = .edge }; model.dissolve() }
-                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { model.mergeSelection() }
+                    ToolButton(icon: "arrow.triangle.merge", title: "Merge") { run { model.mergeSelection() } }
                 case .normals:
-                    ToolButton(icon: "arrow.uturn.up.square", title: "Flip") { model.flipNormals() }
-                    ToolButton(icon: "arrow.up.and.down.square", title: "Recalculate") { model.recalculateNormals() }
-                    ToolButton(icon: model.primary?.mesh?.smooth == true ? "circle.fill" : "hexagon", title: model.primary?.mesh?.smooth == true ? "Smooth Shade" : "Flat Shade") { model.toggleSmoothShading() }
+                    ToolButton(icon: "arrow.uturn.up.square", title: "Flip") { run { model.flipNormals() } }
+                    ToolButton(icon: "arrow.up.and.down.square", title: "Recalculate") { run { model.recalculateNormals() } }
+                    ToolButton(icon: model.primary?.mesh?.smooth == true ? "circle.fill" : "hexagon", title: model.primary?.mesh?.smooth == true ? "Smooth Shade" : "Flat Shade") { run { model.toggleSmoothShading() } }
                     ForEach(UVProjection.allCases) { p in
-                        ToolButton(icon: p.icon, title: "UV \(p.rawValue)") { model.projectUVs(p) }
+                        ToolButton(icon: p.icon, title: "UV \(p.rawValue)") { run { model.projectUVs(p) } }
                     }
                 }
             }
@@ -827,6 +856,20 @@ struct PoseTimeline: View {
                 Slider(value: $model.poseTime, in: 0...max(model.poseDuration, 0.1))
             }
             Text(String(format: "%.2f", model.poseTime)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36)
+        }
+    }
+}
+
+/// Category chips: a sideways scroller in portrait, a tidy grid in the landscape sidebar.
+struct ChipsContainer<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    @Environment(\.verticalTools) private var vertical
+    var body: some View {
+        if vertical {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], spacing: 6) { content() }
+        } else {
+            ScrollView(.horizontal) { HStack(spacing: 6) { content() } }
+                .scrollIndicators(.hidden)
         }
     }
 }

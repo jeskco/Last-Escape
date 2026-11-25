@@ -56,44 +56,118 @@ struct AxisField: View {
     }
 }
 
-// MARK: - Outliner
+// MARK: - Outliner (Blender's outliner: every object, grouped by the model it came from)
 
 struct StudioOutlinerView: View {
     @ObservedObject var model: StudioModel
     @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var open: Set<UUID> = []
+
+    private var filtered: [StudioObject] {
+        query.isEmpty ? model.objects : model.objects.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
     var body: some View {
-        NavigationStack {
+        let list = filtered
+        let loose = list.filter { $0.groupID == nil }
+        var groupOrder: [UUID] = []
+        var groups: [UUID: [StudioObject]] = [:]
+        for o in list { if let g = o.groupID { if groups[g] == nil { groupOrder.append(g) }; groups[g, default: []].append(o) } }
+        return NavigationStack {
             List {
                 if model.objects.isEmpty {
                     ContentUnavailableView("Empty Scene", systemImage: "cube.transparent", description: Text("Add a shape to get started."))
                 }
-                ForEach(model.objects) { o in
-                    HStack(spacing: 12) {
-                        Image(systemName: o.light.map { $0.kind.icon } ?? (o.isImported ? "figure.stand" : "cube.fill"))
-                            .foregroundStyle(.white).font(.footnote.weight(.semibold))
-                            .frame(width: 30, height: 30)
-                            .background((o.isLight ? Color.yellow : o.isImported ? Color.orange : Color(red: Double(o.material.r), green: Double(o.material.g), blue: Double(o.material.b))).gradient, in: RoundedRectangle(cornerRadius: 8))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(o.name).font(.body.weight(model.selection.contains(o.id) ? .semibold : .regular))
-                            Text(o.light.map { "\($0.kind.rawValue) light" } ?? o.mesh.map { "\(Fmt.count($0.triangleCount)) tris" + (o.modifiers.isEmpty ? "" : " · \(o.modifiers.count) modifiers") } ?? "Imported model").font(.caption).foregroundStyle(.secondary)
+                ForEach(groupOrder, id: \.self) { g in
+                    let items = groups[g] ?? []
+                    Section {
+                        DisclosureGroup(isExpanded: Binding(get: { open.contains(g) || !query.isEmpty }, set: { v in if v { open.insert(g) } else { open.remove(g) } })) {
+                            ForEach(items) { o in row(o, indent: true) }
+                        } label: {
+                            groupHeader(g, items)
                         }
-                        Spacer()
-                        Button { model.setHidden(o, !o.hidden) } label: {
-                            Image(systemName: o.hidden ? "eye.slash" : "eye.fill").foregroundStyle(o.hidden ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
-                        }
-                        .buttonStyle(.plain)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { if !o.hidden { model.selection = [o.id] } }
-                    .listRowBackground(model.selection.contains(o.id) ? Color.accentColor.opacity(0.12) : nil)
-                    .swipeActions {
-                        Button(role: .destructive) { model.selection = [o.id]; model.deleteSelection() } label: { Label("Delete", systemImage: "trash") }
+                }
+                if !loose.isEmpty {
+                    Section(groupOrder.isEmpty ? "" : "Objects") {
+                        ForEach(loose) { o in row(o, indent: false) }
                     }
                 }
             }
-            .id(model.revision)
+            .searchable(text: $query, prompt: "Search \(model.objects.count) objects")
             .navigationTitle("Outliner").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button("Select All", systemImage: "checkmark.square") { model.selection = Set(model.objects.filter { !$0.hidden }.map(\.id)) }
+                        Button("Select None", systemImage: "square") { model.selection = [] }
+                        Button("Show All", systemImage: "eye") { for o in model.objects where o.hidden { model.setHidden(o, false) } }
+                        Toggle(isOn: $model.selectParts) { Label("Tap Selects Parts", systemImage: "square.on.square.dashed") }
+                        Toggle(isOn: $model.multiSelect) { Label("Multi-Select", systemImage: "checkmark.circle") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) }
+            }
+        }
+    }
+
+    private func groupHeader(_ g: UUID, _ items: [StudioObject]) -> some View {
+        let allSelected = !items.isEmpty && items.allSatisfy { model.selection.contains($0.id) }
+        let allHidden = items.allSatisfy(\.hidden)
+        return HStack(spacing: 12) {
+            Image(systemName: "shippingbox.fill").foregroundStyle(.white).font(.footnote.weight(.semibold))
+                .frame(width: 30, height: 30).background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(items.first?.groupName ?? "Model").font(.body.weight(.semibold)).lineLimit(1)
+                Text("\(items.count) parts").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { model.selectGroup(g); Haptics.select() } label: {
+                Image(systemName: allSelected ? "checkmark.circle.fill" : "circle").font(.title3).foregroundStyle(.tint)
+            }
+            .buttonStyle(.plain).accessibilityLabel("Select whole model")
+            Button { for o in items { model.setHidden(o, !allHidden) } } label: {
+                Image(systemName: allHidden ? "eye.slash" : "eye.fill").foregroundStyle(allHidden ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+            }
+            .buttonStyle(.plain)
+            Menu {
+                Button("Select Whole Model", systemImage: "checkmark.circle") { model.selectGroup(g) }
+                Button("Join Into One Object", systemImage: "link") { model.joinGroup(g) }
+                Button("Ungroup", systemImage: "square.on.square.dashed") { for o in items { o.groupID = nil; o.groupName = nil }; model.touch() }
+            } label: { Image(systemName: "ellipsis").frame(width: 28, height: 28) }
+        }
+    }
+
+    private func row(_ o: StudioObject, indent: Bool) -> some View {
+        let on = model.selection.contains(o.id)
+        return HStack(spacing: 12) {
+            Image(systemName: o.light.map { $0.kind.icon } ?? (o.isImported ? "figure.stand" : "cube.fill"))
+                .foregroundStyle(.white).font(.caption.weight(.semibold))
+                .frame(width: 26, height: 26)
+                .background((o.isLight ? Color.yellow : o.isImported ? Color.orange : Color(red: Double(o.material.r), green: Double(o.material.g), blue: Double(o.material.b))).gradient, in: RoundedRectangle(cornerRadius: 7))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(o.name).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1)
+                Text(o.light.map { "\($0.kind.rawValue) light" } ?? o.mesh.map { "\(Fmt.count($0.triangleCount)) tris" + (o.modifiers.isEmpty ? "" : " · \(o.modifiers.count) modifiers") } ?? "Imported model")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            if on { Image(systemName: "checkmark").foregroundStyle(.tint).font(.footnote.weight(.bold)) }
+            Button { model.setHidden(o, !o.hidden) } label: {
+                Image(systemName: o.hidden ? "eye.slash" : "eye.fill").foregroundStyle(o.hidden ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint))
+            }
+            .buttonStyle(.plain)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !o.hidden else { return }
+            if model.multiSelect { if on { model.selection.remove(o.id) } else { model.selection.insert(o.id); model.primaryID = o.id } }
+            else { model.selection = [o.id]; model.primaryID = o.id }
+            Haptics.select()
+        }
+        .listRowBackground(on ? Color.accentColor.opacity(0.12) : nil)
+        .swipeActions {
+            Button(role: .destructive) { model.selection = [o.id]; model.deleteSelection() } label: { Label("Delete", systemImage: "trash") }
         }
     }
 }

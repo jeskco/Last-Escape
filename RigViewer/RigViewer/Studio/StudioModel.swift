@@ -27,10 +27,10 @@ final class StudioModel: ObservableObject {
     // MARK: published state
     @Published var objects: [StudioObject] = []
     @Published var selection: Set<UUID> = [] { didSet { selectionChanged() } }
-    @Published private(set) var primaryID: UUID?
+    @Published var primaryID: UUID?
     @Published var mode: StudioMode = .object { didSet { modeChanged(from: oldValue) } }
     @Published var gizmoKind: GizmoKind = .move { didSet { buildGizmo() } }
-    @Published var selectMode: SelectMode = .face { didSet { convertSelection(from: oldValue); refreshOverlay() } }
+    @Published var selectMode: SelectMode = .face { didSet { selRev &+= 1; convertSelection(from: oldValue); refreshOverlay() } }
     @Published var multiSelect = false
     @Published var snapping = false
     @Published var showGrid = true { didSet { grid.isHidden = !showGrid } }
@@ -50,7 +50,13 @@ final class StudioModel: ObservableObject {
     @Published var paintBlur = false
     @Published var remeshResolution: Double = 64
     @Published var voxelResolution: Double = 72
+    /// Tap individual parts of a grouped model instead of the whole model.
+    @Published var selectParts = false
+    @Published private(set) var statsText = "Empty"
+
     var dragWeights: [(Int, Float)] = []
+    var selRev = 0
+    private var _editVertsCache: (key: Int, owner: UUID?, set: Set<Int>)?
     var keepLastOpOnPush = false
     private var goals: [UUID: Goal] = [:]
     private var directGrabY: Float = 0
@@ -63,9 +69,9 @@ final class StudioModel: ObservableObject {
     var paintStrokeActive = false
 
     // Edit-mode selection (indices into the primary object's mesh)
-    @Published var selVerts: Set<Int> = []
-    @Published var selEdges: Set<EditMesh.Edge> = []
-    @Published var selFaces: Set<Int> = []
+    @Published var selVerts: Set<Int> = [] { didSet { selRev &+= 1 } }
+    @Published var selEdges: Set<EditMesh.Edge> = [] { didSet { selRev &+= 1 } }
+    @Published var selFaces: Set<Int> = [] { didSet { selRev &+= 1 } }
 
     // Sculpt
     @Published var brush: SculptBrush = .draw
@@ -172,6 +178,9 @@ final class StudioModel: ObservableObject {
 
     func showToast(_ s: String) {
         toastTask?.cancel()
+        if s.hasPrefix("Select") || s.hasPrefix("Tap") || s.contains("first") || s.hasPrefix("That") || s.hasPrefix("Nothing") {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        }
         withAnimation(.spring(duration: 0.4)) { toast = s }
         toastTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_600_000_000)
@@ -179,7 +188,14 @@ final class StudioModel: ObservableObject {
         }
     }
 
-    func touch() { revision &+= 1; dirty = true }
+    func touch() {
+        revision &+= 1; dirty = true
+        var tris = 0
+        for o in objects { if let m = o.mesh { tris += m.triangleCount } }
+        let n = objects.count
+        let t = "\(n) \(n == 1 ? "object" : "objects")" + (tris > 0 ? " · \(Fmt.count(tris)) tris" : "")
+        if t != statsText { statsText = t }
+    }
 
     func material(for o: StudioObject) -> SCNMaterial {
         let r = o.material
@@ -311,47 +327,102 @@ final class StudioModel: ObservableObject {
     }
 
     /// Turns the static meshes of an imported model into editable Studio shapes (keeps their textures).
+    /// Turns an imported model's static meshes into editable parts (done off the main thread, added in one go).
+    /// Parts keep the model together as a group, so tapping any of them selects and moves the whole thing.
     func convertToEditable(_ o: StudioObject, removeEmpty: Bool = false) {
-        guard o.isImported else { return }
-        pushUndo()
-        var made = 0, skipped = 0
-        var geoNodes: [SCNNode] = []
-        o.node.enumerateHierarchy { n, _ in if n.geometry != nil { geoNodes.append(n) } }
-        for n in geoNodes {
-            guard let g = n.geometry else { continue }
-            if n.skinner != nil || n.morpher != nil { skipped += 1; continue }
+        guard o.isImported, busy == nil else { return }
+        struct Job { let node: SCNNode; let geometry: SCNGeometry; let element: Int; let transform: simd_float4x4; let material: SCNMaterial?; let name: String }
+        var jobs: [Job] = []
+        var skipped = 0
+        let base = contentRoot.simdWorldTransform.inverse
+        o.node.enumerateHierarchy { n, _ in
+            guard let g = n.geometry else { return }
+            if n.skinner != nil || n.morpher != nil { skipped += 1; return }
             for ei in 0..<g.elements.count {
-                guard var mesh = EditMesh.from(geometry: g, element: ei), mesh.faceCount > 0 else { continue }
-                mesh.apply(contentRoot.simdWorldTransform.inverse * n.simdWorldTransform)
                 let mat = g.materials.isEmpty ? nil : g.materials[ei % g.materials.count]
-                var rec = MaterialRecord()
-                if let c = mat?.diffuse.contents as? UIColor {
-                    var r: CGFloat = 0, gg: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0; c.getRed(&r, green: &gg, blue: &b, alpha: &a)
-                    rec.r = Float(r); rec.g = Float(gg); rec.b = Float(b)
-                }
-                if let rv = mat?.roughness.contents as? NSNumber { rec.roughness = rv.floatValue }
-                if let mv = mat?.metalness.contents as? NSNumber { rec.metalness = mv.floatValue }
-                rec.doubleSided = mat?.isDoubleSided ?? false
                 let name = (n.name?.isEmpty == false ? n.name! : "Part") + (g.elements.count > 1 ? " \(ei + 1)" : "")
-                let s = StudioObject(name: uniqueName(name), mesh: mesh, material: rec)
-                s.textureImage = ViewerModel.thumbnailFull(mat?.diffuse.contents)
-                add(s, select: false)
-                made += 1
-            }
-            n.geometry = nil
-        }
-        if removeEmpty && skipped == 0 {
-            var leftover = false
-            o.node.enumerateHierarchy { n, _ in if n.geometry != nil { leftover = true } }
-            if !leftover {
-                o.node.removeFromParentNode()
-                objects.removeAll { $0.id == o.id }
-                selection = Set(objects.prefix(1).map(\.id))
+                jobs.append(Job(node: n, geometry: g, element: ei, transform: base * n.simdWorldTransform, material: mat, name: name))
             }
         }
-        if made > 0 { showToast("Made \(made) editable \(made == 1 ? "shape" : "shapes")" + (skipped > 0 ? " · \(skipped) rigged kept for posing" : "")) }
-        else { showToast(skipped > 0 ? "Rigged meshes stay as they are so they can be posed" : "Nothing to convert") }
-        touch()
+        guard !jobs.isEmpty else { showToast(skipped > 0 ? "Rigged meshes stay as they are so they can be posed" : "Nothing to convert"); return }
+        pushUndo()
+        busy = "Preparing \(jobs.count) parts…"
+        let inputs = jobs.map { ($0.geometry, $0.element, $0.transform) }
+        let allJobs = jobs, skippedCount = skipped
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var meshes: [EditMesh?] = []
+            meshes.reserveCapacity(inputs.count)
+            for (g, ei, t) in inputs {
+                guard var m = EditMesh.from(geometry: g, element: ei), m.faceCount > 0 else { meshes.append(nil); continue }
+                m.apply(t)
+                meshes.append(m)
+            }
+            await MainActor.run {
+                guard let self else { return }
+                let group = UUID()
+                var names = Set(self.objects.map(\.name))
+                var made: [StudioObject] = []
+                for (job, meshOpt) in zip(allJobs, meshes) {
+                    guard var mesh = meshOpt else { continue }
+                    let centre = mesh.recentre()
+                    var rec = MaterialRecord()
+                    let mat = job.material
+                    if let c = mat?.diffuse.contents as? UIColor {
+                        var r: CGFloat = 0, gg: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0; c.getRed(&r, green: &gg, blue: &b, alpha: &a)
+                        rec.r = Float(r); rec.g = Float(gg); rec.b = Float(b)
+                    }
+                    if let rv = mat?.roughness.contents as? NSNumber { rec.roughness = rv.floatValue }
+                    if let mv = mat?.metalness.contents as? NSNumber { rec.metalness = mv.floatValue }
+                    rec.doubleSided = mat?.isDoubleSided ?? false
+                    var name = job.name; var k = 2
+                    while names.contains(name) { name = "\(job.name) \(k)"; k += 1 }
+                    names.insert(name)
+                    let s = StudioObject(name: name, mesh: mesh, material: rec)
+                    s.groupID = group; s.groupName = o.name
+                    s.textureImage = ViewerModel.thumbnailFull(mat?.diffuse.contents)
+                    s.node.simdPosition = centre
+                    self.contentRoot.addChildNode(s.node)
+                    self.rebuild(s, keepMaterial: false)
+                    made.append(s)
+                    job.node.geometry = nil
+                }
+                var list = self.objects
+                if removeEmpty && skippedCount == 0 {
+                    var leftover = false
+                    o.node.enumerateHierarchy { n, _ in if n.geometry != nil { leftover = true } }
+                    if !leftover { o.node.removeFromParentNode(); list.removeAll { $0.id == o.id } }
+                }
+                list += made
+                self.objects = list
+                self.busy = nil
+                self.selection = Set(made.map(\.id))
+                self.primaryID = made.first?.id
+                self.touch()
+                self.focusSelection()
+                self.showToast("\(made.count) editable parts · tap selects the whole model, turn on Parts to pick one" + (skippedCount > 0 ? " · \(skippedCount) rigged kept for posing" : ""))
+            }
+        }
+    }
+
+    /// What one tap selects: the whole group, unless "Parts" is on.
+    func selectionUnit(for o: StudioObject) -> Set<UUID> {
+        guard !selectParts, let g = o.groupID else { return [o.id] }
+        return Set(objects.filter { $0.groupID == g && !$0.hidden }.map(\.id))
+    }
+
+    func selectGroup(_ g: UUID) {
+        let ids = objects.filter { $0.groupID == g && !$0.hidden }.map(\.id)
+        selection = Set(ids); primaryID = ids.first
+        focusSelection()
+    }
+
+    /// Joins every part of a group into one object.
+    func joinGroup(_ g: UUID) {
+        let ids = objects.filter { $0.groupID == g && $0.mesh != nil }.map(\.id)
+        guard ids.count > 1 else { return }
+        selection = Set(ids); primaryID = ids.first
+        joinSelection()
+        if let p = primary { p.groupID = nil; p.groupName = nil }
     }
 
     // MARK: selection
@@ -405,6 +476,17 @@ final class StudioModel: ObservableObject {
 
     /// Vertices affected by the current edit selection.
     var editVertices: Set<Int> {
+        let key = selRev &* 1_000_003 &+ (primary?.meshVersion ?? 0)
+        if let c = editVertsCache, c.key == key, c.owner == primaryID { return c.set }
+        let r = computeEditVertices()
+        editVertsCache = (key, primaryID, r)
+        return r
+    }
+    private var editVertsCache: (key: Int, owner: UUID?, set: Set<Int>)? {
+        get { _editVertsCache }
+        set { _editVertsCache = newValue }
+    }
+    private func computeEditVertices() -> Set<Int> {
         guard let m = primary?.mesh else { return [] }
         switch selectMode {
         case .vertex: return selVerts
@@ -445,9 +527,13 @@ final class StudioModel: ObservableObject {
         case .object, .sculpt, .paint:
             let hits = v.hitTest(p, options: [.categoryBitMask: Self.objectMask, .searchMode: SCNHitTestSearchMode.closest.rawValue, .ignoreHiddenNodes: true])
             if let hit = hits.first, let o = owner(of: hit.node) {
+                let unit = selectionUnit(for: o)
                 if multiSelect {
-                    if selection.contains(o.id) { selection.remove(o.id) } else { selection.insert(o.id); primaryID = o.id }
-                } else { selection = [o.id] }
+                    if selection.contains(o.id) { selection.subtract(unit) } else { selection.formUnion(unit); primaryID = o.id }
+                } else {
+                    selection = unit
+                    primaryID = o.id
+                }
                 Haptics.select()
             } else if mode == .object && !multiSelect {
                 selection = []
@@ -474,10 +560,29 @@ final class StudioModel: ObservableObject {
         return SIMD3(Float(p.x), Float(p.y), Float(p.z))
     }
 
+    /// Projects many points quickly (one matrix multiply each instead of a SceneKit call per point).
+    /// Returns screen x, y and a 0…1 depth (outside 0…1 means behind the camera or clipped).
+    func makeProjector() -> ((SIMD3<Float>) -> SIMD3<Float>)? {
+        guard let v = view, let cam = cameraNode.camera else { return nil }
+        let size = v.bounds.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let proj = simd_float4x4(cam.projectionTransform(withViewportSize: size))
+        let vp = proj * cameraNode.simdWorldTransform.inverse
+        let W = Float(size.width), H = Float(size.height)
+        return { p in
+            let c = vp * SIMD4(p, 1)
+            guard c.w > 1e-5 else { return SIMD3(-9999, -9999, -1) }
+            let n = SIMD3(c.x, c.y, c.z) / c.w
+            return SIMD3((n.x * 0.5 + 0.5) * W, (0.5 - n.y * 0.5) * H, min(max(n.z * 0.5 + 0.5, 0.0001), 0.9999))
+        }
+    }
+
     private func editTap(at p: CGPoint) {
         guard let o = primary, let mesh = o.mesh, let v = view else { return }
         let world = o.node.simdWorldTransform
         func w(_ i: Int) -> SIMD3<Float> { let q = world * SIMD4(mesh.positions[i], 1); return SIMD3(q.x, q.y, q.z) }
+        let fast = makeProjector()
+        func project(_ q: SIMD3<Float>) -> SIMD3<Float> { fast?(q) ?? self.project(q) }
         let tp = SIMD2<Float>(Float(p.x), Float(p.y))
         switch selectMode {
         case .face:
@@ -542,11 +647,13 @@ final class StudioModel: ObservableObject {
         }
         // Wireframe
         let edges = mesh.edges()
-        let selE: Set<EditMesh.Edge> = selectMode == .edge ? selEdges : Set(edges.filter { editVertices.contains($0.a) && editVertices.contains($0.b) })
+        let ev = editVertices     // computed once (it was being rebuilt for every edge)
+        let selE: Set<EditMesh.Edge> = selectMode == .edge ? selEdges : Set(edges.filter { ev.contains($0.a) && ev.contains($0.b) })
         var normal: [UInt32] = [], picked: [UInt32] = []
         for e in edges { if selE.contains(e) { picked += [UInt32(e.a), UInt32(e.b)] } else { normal += [UInt32(e.a), UInt32(e.b)] } }
         var els: [SCNGeometryElement] = []; var mats: [SCNMaterial] = []
-        if !normal.isEmpty { els.append(SCNGeometryElement(indices: normal, primitiveType: .line)); mats.append(mat(UIColor.black.withAlphaComponent(0.55))) }
+        let heavy = mesh.vertexCount > 60_000
+        if !normal.isEmpty && !heavy { els.append(SCNGeometryElement(indices: normal, primitiveType: .line)); mats.append(mat(UIColor.black.withAlphaComponent(0.55))) }
         if !picked.isEmpty { els.append(SCNGeometryElement(indices: picked, primitiveType: .line)); mats.append(mat(accent)) }
         if !els.isEmpty {
             let g = SCNGeometry(sources: [src], elements: els); g.materials = mats
@@ -555,7 +662,7 @@ final class StudioModel: ObservableObject {
         // Points in vertex mode
         if selectMode == .vertex {
             var a: [UInt32] = [], b: [UInt32] = []
-            for i in 0..<mesh.vertexCount { if selVerts.contains(i) { b.append(UInt32(i)) } else { a.append(UInt32(i)) } }
+            for i in 0..<mesh.vertexCount { if selVerts.contains(i) { b.append(UInt32(i)) } else if !heavy { a.append(UInt32(i)) } }
             var pe: [SCNGeometryElement] = []; var pm: [SCNMaterial] = []
             for (list, color, size) in [(a, UIColor.black, CGFloat(5)), (b, accent, CGFloat(9))] where !list.isEmpty {
                 let e = SCNGeometryElement(indices: list, primitiveType: .point)
@@ -639,7 +746,10 @@ final class StudioModel: ObservableObject {
         switch mode {
         case .object:
             guard let p = primary else { return nil }
-            return p.node.simdWorldPosition
+            if selection.count <= 1 { return p.node.simdWorldPosition }
+            var c = SIMD3<Float>(repeating: 0); var n: Float = 0
+            for o in objects where selection.contains(o.id) { c += o.node.simdWorldPosition; n += 1 }
+            return n > 0 ? c / n : p.node.simdWorldPosition
         case .edit:
             guard let o = primary, let m = o.mesh else { return nil }
             let vs = editVertices; guard !vs.isEmpty else { return nil }
@@ -1343,8 +1453,10 @@ final class StudioModel: ObservableObject {
     private func easeGoals(_ dt: Float) {
         guard !goals.isEmpty else { return }
         let k = dt <= 0 ? 1 : 1 - expf(-dt * 34)
+        var byID: [UUID: StudioObject] = [:]
+        for o in objects where goals[o.id] != nil { byID[o.id] = o }
         for (id, g) in goals {
-            guard let o = objects.first(where: { $0.id == id }) else { goals[id] = nil; continue }
+            guard let o = byID[id] else { goals[id] = nil; continue }
             let n = o.node
             n.simdPosition += (g.p - n.simdPosition) * k
             var q = g.q; if simd_dot(q.vector, n.simdOrientation.vector) < 0 { q = simd_quatf(vector: -q.vector) }
@@ -1386,7 +1498,7 @@ final class StudioModel: ObservableObject {
     }
 
     private func record(_ o: StudioObject) -> ObjectRecord {
-        ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: o.material, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light)
+        ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: o.material, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light, groupID: o.groupID, groupName: o.groupName, meshVersion: o.meshVersion)
     }
 
     func pushUndo() {
@@ -1405,14 +1517,24 @@ final class StudioModel: ObservableObject {
         for (id, o) in graveyard { byID[id] = byID[id] ?? o }
         var result: [StudioObject] = []
         for r in s.objects {
+            let fresh = byID[r.id] == nil
             let o = byID[r.id] ?? StudioObject(id: r.id, name: r.name, mesh: r.mesh, material: r.material)
-            o.name = r.name; o.mesh = r.mesh; o.material = r.material; o.hidden = r.hidden
+            // Only rebuild geometry that actually changed (undo stays instant even with hundreds of parts).
+            let meshChanged = fresh || o.meshVersion != (r.meshVersion ?? -1) || (o.mesh != nil && o.node.geometry == nil)
+            if meshChanged { o.mesh = r.mesh; if let v = r.meshVersion { o.meshVersion = v } }
+            let matChanged = o.material != r.material
+            let modsChanged = o.modifiers != (r.modifiers ?? [])
+            o.name = r.name; o.material = r.material; o.hidden = r.hidden
             o.modifiers = r.modifiers ?? []
+            o.groupID = r.groupID; o.groupName = r.groupName
             if o.light != r.light { o.light = r.light; configureLight(o) }
             r.transform.apply(to: o.node)
             o.node.isHidden = r.hidden
             if o.node.parent == nil { contentRoot.addChildNode(o.node) }
-            if o.mesh != nil { rebuild(o, keepMaterial: false) }
+            if o.mesh != nil {
+                if meshChanged || modsChanged { rebuild(o, keepMaterial: false) }
+                else if matChanged { o.node.geometry?.materials = [material(for: o)] }
+            }
             result.append(o)
         }
         for o in objects where !s.order.contains(o.id) { o.node.removeFromParentNode(); graveyard[o.id] = o }

@@ -32,7 +32,7 @@ extension StudioModel {
                 try? png.write(to: projectDir.appendingPathComponent("textures").appendingPathComponent(name))
                 m.texture = name
             } else { m.texture = nil }
-            records.append(ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: m, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light))
+            records.append(ObjectRecord(id: o.id, name: o.name, mesh: o.mesh, material: m, transform: TransformRecord(o.node), hidden: o.hidden, modifiers: o.modifiers, light: o.light, groupID: o.groupID, groupName: o.groupName))
         }
         let file = StudioProjectFile(name: projectName, objects: records, world: world)
         if let data = try? JSONEncoder().encode(file) { try? data.write(to: projectDir.appendingPathComponent("project.json"), options: .atomic) }
@@ -69,6 +69,7 @@ extension StudioModel {
             let o = StudioObject(id: r.id, name: r.name, mesh: r.mesh, material: r.material)
             o.modifiers = r.modifiers ?? []
             o.light = r.light
+            o.groupID = r.groupID; o.groupName = r.groupName
             if let t = r.material.texture { o.textureImage = UIImage(contentsOfFile: dir.appendingPathComponent("textures").appendingPathComponent(t).path) }
             r.transform.apply(to: o.node)
             o.hidden = r.hidden; o.node.isHidden = r.hidden

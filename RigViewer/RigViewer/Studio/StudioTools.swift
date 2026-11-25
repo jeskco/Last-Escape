@@ -7,6 +7,19 @@ import simd
 /// vertex paint, UVs, viewport shading, world and rendering.
 extension StudioModel {
 
+    // MARK: - Heavy work
+
+    func perform(_ work: @escaping () -> Void) {
+        let faces = primary?.mesh?.faceCount ?? 0
+        guard faces > 40_000, busy == nil else { work(); return }
+        busy = "Working…"
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 40_000_000)
+            work()
+            busy = nil
+        }
+    }
+
     // MARK: - Adjustable operations (Blender's "Adjust Last Operation")
 
     /// Runs an edit on the primary mesh and keeps it adjustable afterwards.
