@@ -1,0 +1,300 @@
+
+SwiftMergeGeneratedHeaders /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/DerivedSources/RigViewer-Swift.h /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer-Swift.h (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-swiftHeaderTool -arch arm64 /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer-Swift.h -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/DerivedSources/RigViewer-Swift.h
+
+Copy /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.swiftmodule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftmodule (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftmodule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.swiftmodule
+
+Copy /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.swiftdoc /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftdoc (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftdoc /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.swiftdoc
+
+Copy /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.abi.json /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.abi.json (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.abi.json /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/arm64-apple-ios.abi.json
+
+Copy /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftsourceinfo (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftsourceinfo /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo
+
+ScanDependencies /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/ThirdParty/ufbx/ufbx.c normal arm64 c com.apple.compilers.llvm.clang.1_0.compiler (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    
+    Using response file: /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/7187679823f38a2a940e0043cdf9d637-common-args.resp
+    
+    builtin-ScanDependencies -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.o.scan -- /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x c -ivfsstatcache /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/SDKStatCaches.noindex/iphoneos26.2-23C57-dc75598d0054f22ec865fa860f139d722dd23b4ebda140f7210d155ff1243552.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wquoted-include-in-framework-header -Werror\=deprecated-objc-isa-usage -Werror\=objc-root-class -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-implicit-fallthrough -fstrict-aliasing -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability @/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/7187679823f38a2a940e0043cdf9d637-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.d --serialize-diagnostics /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.dia -c /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/ThirdParty/ufbx/ufbx.c -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.o
+
+ScanDependencies /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/FBXImporter.m normal arm64 objective-c com.apple.compilers.llvm.clang.1_0.compiler (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    
+    Using response file: /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp
+    
+    builtin-ScanDependencies -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.o.scan -- /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x objective-c -ivfsstatcache /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/SDKStatCaches.noindex/iphoneos26.2-23C57-dc75598d0054f22ec865fa860f139d722dd23b4ebda140f7210d155ff1243552.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wquoted-include-in-framework-header -Wno-implicit-atomic-properties -Werror\=deprecated-objc-isa-usage -Wno-objc-interface-ivars -Werror\=objc-root-class -Wno-arc-repeated-use-of-weak -Wimplicit-retain-self -Wduplicate-method-match -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-selector -Wno-strict-selector-match -Wundeclared-selector -Wdeprecated-implementations -Wno-implicit-fallthrough -fstrict-aliasing -Wprotocol -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability @/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.d --serialize-diagnostics /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.dia -c /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/FBXImporter.m -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.o
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdbool-BUMJQS65R2BZB0Q99UI7EEA2G.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdbool-BUMJQS65R2BZB0Q99UI7EEA2G.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_AvailabilityInternal-D3SYUPS78IGQ1X98QIYBMY3G0.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_AvailabilityInternal-D3SYUPS78IGQ1X98QIYBMY3G0.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrcheck-2SZYF9OVRQ8PB8L4I46TSYNPK.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrcheck-2SZYF9OVRQ8PB8L4I46TSYNPK.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdarg-DPJRQE0NN38IZF7YWWPXAX68T.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdarg-DPJRQE0NN38IZF7YWWPXAX68T.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stddef-5JFGZ7M9ECSWDPHP3CKLUYGUX.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stddef-5JFGZ7M9ECSWDPHP3CKLUYGUX.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation1-EF9DXSTH78VVQ9BV9T8XQWW2M.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation1-EF9DXSTH78VVQ9BV9T8XQWW2M.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_float-AAASX1S9XNR85X4HYLPHIQ8GS.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_float-AAASX1S9XNR85X4HYLPHIQ8GS.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation2-BBRVQ8K7T3AM1BCA3UPKCUFF.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation2-BBRVQ8K7T3AM1BCA3UPKCUFF.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-ABTJLDX3SUYKWNB40X2R44OYW.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-ABTJLDX3SUYKWNB40X2R44OYW.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation3-J3KSO4IKHZ7ULIENENPNOME0.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation3-J3KSO4IKHZ7ULIENENPNOME0.scan
+
+CompileC /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/ThirdParty/ufbx/ufbx.c normal arm64 c com.apple.compilers.llvm.clang.1_0.compiler (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    
+    Using response file: /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/7187679823f38a2a940e0043cdf9d637-common-args.resp
+    
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x c -ivfsstatcache /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/SDKStatCaches.noindex/iphoneos26.2-23C57-dc75598d0054f22ec865fa860f139d722dd23b4ebda140f7210d155ff1243552.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wquoted-include-in-framework-header -Werror\=deprecated-objc-isa-usage -Werror\=objc-root-class -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-implicit-fallthrough -fstrict-aliasing -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability @/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/7187679823f38a2a940e0043cdf9d637-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.d --serialize-diagnostics /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.dia -c /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/ThirdParty/ufbx/ufbx.c -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ufbx.o
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrauth-90YZXXVJ6MCG8QCILD8NZK6WM.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrauth-90YZXXVJ6MCG8QCILD8NZK6WM.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrcheck-6ZCLNWPK27YKJ9GH0PUWVEMP2.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrcheck-6ZCLNWPK27YKJ9GH0PUWVEMP2.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdarg-5TEHQ8CROXEB5YAJZGY9GJVWE.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdarg-5TEHQ8CROXEB5YAJZGY9GJVWE.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_AvailabilityInternal-8BDHESPYS5L6QKD23U75X5VFD.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_AvailabilityInternal-8BDHESPYS5L6QKD23U75X5VFD.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stddef-B6C0H52UIVGDAZFO4WQIUKZ31.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stddef-B6C0H52UIVGDAZFO4WQIUKZ31.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_float-1FVQJHR1N7BKBCUYJPQ4U28X4.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_float-1FVQJHR1N7BKBCUYJPQ4U28X4.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation1-7S4T8OBHIT6IKB527ZIMP6Y4E.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation1-7S4T8OBHIT6IKB527ZIMP6Y4E.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdbool-5SC79BHUEWM16360H7FOHTK9A.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdbool-5SC79BHUEWM16360H7FOHTK9A.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_limits-79CGIYPHJHVCFIRT70SP6KM2O.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_limits-79CGIYPHJHVCFIRT70SP6KM2O.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation2-2N9EDWR5QSS021RLKK13DCHDZ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation2-2N9EDWR5QSS021RLKK13DCHDZ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-BIIYS7WCOSU7O2QC2N8CI4KV.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-BIIYS7WCOSU7O2QC2N8CI4KV.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-70N85ISOTQ3QJ2R7IXSK19WFZ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-70N85ISOTQ3QJ2R7IXSK19WFZ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_intrinsics-79DR0ASNKL13WYBPF3LUYYCUP.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_intrinsics-79DR0ASNKL13WYBPF3LUYYCUP.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation3-122OF0N3NSWURVZEIW1BY5NO0.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_DarwinFoundation3-122OF0N3NSWURVZEIW1BY5NO0.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-A7JRH5GOGOVIDZB24JF5AZUVJ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-A7JRH5GOGOVIDZB24JF5AZUVJ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-EEY3W8HJ19A3A8ALYVY7HKPXA.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-EEY3W8HJ19A3A8ALYVY7HKPXA.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/simd-ELXRMWQLY8HRGBXVTQWPJRXOS.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/simd-ELXRMWQLY8HRGBXVTQWPJRXOS.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ObjectiveC-7B8L5NDWVML6PZLPDDK7N6BBB.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ObjectiveC-7B8L5NDWVML6PZLPDDK7N6BBB.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-347U9QPMUJFVREZZXM55XII1O.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-347U9QPMUJFVREZZXM55XII1O.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-78KF52R0JGIPBXYSJM09RNTAZ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-78KF52R0JGIPBXYSJM09RNTAZ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-13KDABHEZNQAZWVKTKN4FVXCF.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-13KDABHEZNQAZWVKTKN4FVXCF.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreFoundation-AXO0UNL9Y7T02GINQW3MV3NJ0.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreFoundation-AXO0UNL9Y7T02GINQW3MV3NJ0.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/XPC-DQS50CPFNH4ZBJ3ZRK5F063X6.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/XPC-DQS50CPFNH4ZBJ3ZRK5F063X6.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Security-C476IN34Y1W44NI47T6CA76CB.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Security-C476IN34Y1W44NI47T6CA76CB.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CFNetwork-27L7NXFK8GE2AS557SVHN3QQY.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CFNetwork-27L7NXFK8GE2AS557SVHN3QQY.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreGraphics-2P5OIBKBVIOPOI5V4ZF0Z0BGB.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreGraphics-2P5OIBKBVIOPOI5V4ZF0Z0BGB.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Foundation-26AS0Y8SLQFGW2N65BP7CQ192.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Foundation-26AS0Y8SLQFGW2N65BP7CQ192.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ImageIO-6VX67AQSXI0LDJKMZFM7ZEKW0.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ImageIO-6VX67AQSXI0LDJKMZFM7ZEKW0.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreText-6HT5FWEU42CPFE7L8R5LD85JJ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreText-6HT5FWEU42CPFE7L8R5LD85JJ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UserNotifications-85BL7RVNXLVU83HCYSSFRLBAU.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UserNotifications-85BL7RVNXLVU83HCYSSFRLBAU.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Symbols-AVSXXOWT4ESEL2UNMYJCKRF1N.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Symbols-AVSXXOWT4ESEL2UNMYJCKRF1N.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UIUtilities-895VEWU940UD983HUOA0PQFLU.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UIUtilities-895VEWU940UD983HUOA0PQFLU.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ModelIO-C7HB6BXJPZEDV4RFCOTZ2YIA6.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ModelIO-C7HB6BXJPZEDV4RFCOTZ2YIA6.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/IOSurface-2MMR66JCVLGZ1WGSIQ82TM9MY.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/IOSurface-2MMR66JCVLGZ1WGSIQ82TM9MY.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/FileProvider-2INXNK2YHZOV2KT33RLHY8LIM.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/FileProvider-2INXNK2YHZOV2KT33RLHY8LIM.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/OpenGLES-BUSVR6M5MHPSEPI7651CQUIYU.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/OpenGLES-BUSVR6M5MHPSEPI7651CQUIYU.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Metal-D6XPCUPMTH0JXBCN2EHAMUS39.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Metal-D6XPCUPMTH0JXBCN2EHAMUS39.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreVideo-51YX93KP2G4QTFM6TK9X5MAMG.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreVideo-51YX93KP2G4QTFM6TK9X5MAMG.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreImage-10V68VWZQ2C1YLT5J1E98INPQ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreImage-10V68VWZQ2C1YLT5J1E98INPQ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/QuartzCore-27PQO6H7JSN8R2IU3BSOQK9AU.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/QuartzCore-27PQO6H7JSN8R2IU3BSOQK9AU.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UIKit-C96NH2KNHGTC3HWT0QMMZJOZJ.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/UIKit-C96NH2KNHGTC3HWT0QMMZJOZJ.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/GLKit-DOZRPGBRTL8DAIUD6X7TBN9KW.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/GLKit-DOZRPGBRTL8DAIUD6X7TBN9KW.scan
+
+PrecompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/SceneKit-1G5UBP5QVW1CT9UR64W3X1N7F.scan
+    cd /
+    builtin-precompileModule /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/SceneKit-1G5UBP5QVW1CT9UR64W3X1N7F.scan
+
+CompileC /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/FBXImporter.m normal arm64 objective-c com.apple.compilers.llvm.clang.1_0.compiler (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    
+    Using response file: /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp
+    
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x objective-c -ivfsstatcache /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/SDKStatCaches.noindex/iphoneos26.2-23C57-dc75598d0054f22ec865fa860f139d722dd23b4ebda140f7210d155ff1243552.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wquoted-include-in-framework-header -Wno-implicit-atomic-properties -Werror\=deprecated-objc-isa-usage -Wno-objc-interface-ivars -Werror\=objc-root-class -Wno-arc-repeated-use-of-weak -Wimplicit-retain-self -Wduplicate-method-match -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-selector -Wno-strict-selector-match -Wundeclared-selector -Wdeprecated-implementations -Wno-implicit-fallthrough -fstrict-aliasing -Wprotocol -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability @/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.d --serialize-diagnostics /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.dia -c /Users/runner/work/Last-Escape/Last-Escape/RigViewer/RigViewer/FBXImporter.m -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/FBXImporter.o
+
+Ld /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer normal (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0 -isysroot /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk -Os -L/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/EagerLinkingTBDs/Release-iphoneos -L/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos -F/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/EagerLinkingTBDs/Release-iphoneos -F/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos -filelist /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @executable_path/Frameworks -dead_strip -Xlinker -object_path_lto -Xlinker /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer_lto.o -Xlinker -dependency_info -Xlinker /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer_dependency_info.dat -fobjc-arc -fobjc-link-runtime -L/Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.swiftmodule @/Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer-linker-args.resp -framework GLTFKit2 -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer
+
+CopySwiftLibs /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer --scan-folder /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/Frameworks --scan-folder /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/PlugIns --scan-folder /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/SystemExtensions --scan-folder /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/Extensions --platform iphoneos --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.3.7003.10.fpklgu/Metal.xctoolchain --toolchain /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os --back-deploy-swift-span
+Ignoring --strip-bitcode because --sign was not passed
+
+GenerateDSYMFile /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app.dSYM /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/dsymutil /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer -o /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app.dSYM
+
+ExtractAppIntentsMetadata (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.3.7003.10.fpklgu/Metal.xctoolchain --module-name RigViewer --sdk-root /Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk --xcode-version 17C529 --platform-family iOS --deployment-target 17.0 --bundle-identifier com.rigviewer.native --output /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app --target-triple arm64-apple-ios17.0 --binary-file /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/RigViewer --dependency-file /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer_dependency_info.dat --stringsdata-file /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.SwiftFileList --metadata-file-list /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/RigViewer.DependencyMetadataFileList --static-metadata-file-list /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/RigViewer.DependencyStaticMetadataFileList --swift-const-vals-list /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/Objects-normal/arm64/RigViewer.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-11-25 00:17:26.658 appintentsmetadataprocessor[6578:21558] Starting appintentsmetadataprocessor export
+2026-11-25 00:17:26.675 appintentsmetadataprocessor[6578:21558] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    /Applications/Xcode_26.3.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/Info.plist --temp-dir-path /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/ssu --bundle-id com.rigviewer.native --product-path /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app --extracted-metadata-path /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app/Metadata.appintents --metadata-file-list /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Intermediates.noindex/RigViewer.build/Release-iphoneos/RigViewer.build/RigViewer.DependencyMetadataFileList --archive-ssu-assets
+2026-11-25 00:17:26.758 appintentsnltrainingprocessor[6580:21564] Parsing options for appintentsnltrainingprocessor
+2026-11-25 00:17:26.763 appintentsnltrainingprocessor[6580:21564] No AppShortcuts found - Skipping.
+
+RegisterExecutionPolicyException /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-RegisterExecutionPolicyException /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app
+
+Validate /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    builtin-validationUtility /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app (in target 'RigViewer' from project 'RigViewer')
+    cd /Users/runner/work/Last-Escape/Last-Escape/RigViewer
+    /usr/bin/touch -c /Users/runner/work/Last-Escape/Last-Escape/RigViewer/build/Build/Products/Release-iphoneos/RigViewer.app
+
+** BUILD SUCCEEDED **
+
