@@ -84,6 +84,7 @@ struct InstalledAppsListView: View {
 
     private var appContent: some View {
         tabContent(for: mode)
+            .armNavBackground()
             .navigationTitle(mode.navigationTitle)
             .searchable(
                 text: currentSearchBinding,

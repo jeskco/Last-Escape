@@ -26,6 +26,8 @@ struct ToolsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .armNavBackground()
             .navigationTitle("Tools")
         }
     }

@@ -215,6 +215,7 @@ struct SettingsView: View {
                         .listRowBackground(Color.clear)
                 }
             }
+            .armNavBackground()
             .navigationTitle("Settings")
             .background(KeyboardTapDismissal())
             .scrollDismissesKeyboard(.interactively)

@@ -46,9 +46,12 @@ enum ARMTheme {
 /// ARMSX2's own PlayStation 2 menu wallpaper (towers, crystals, orbs and fog), animated behind the whole app.
 struct ARMBackground: View {
     var body: some View {
-        PlayStation2MenuBackground(theme: .blue)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+        ZStack {
+            PlayStation2MenuBackground(theme: .blue)
+            FaceButtonParticles()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
@@ -76,6 +79,16 @@ extension View {
     }
 
     func armCard() -> some View { modifier(ARMCard()) }
+
+    /// Lets the wallpaper show through a NavigationStack (its container background is opaque by default).
+    @ViewBuilder
+    func armNavBackground() -> some View {
+        if #available(iOS 18.0, *) {
+            self.containerBackground(.clear, for: .navigation)
+        } else {
+            self
+        }
+    }
 }
 
 /// Status + switch for the built-in VPN, shown as the first list section. Hidden in builds without the extension.

@@ -63,6 +63,7 @@ struct MainTabView: View {
             TabView(selection: $selection) {
                 ForEach(AppFeature.mainTabs) { feature in
                     feature.destination
+                        .background(ARMBackground())
                         .tabItem { Label(feature.title, systemImage: feature.systemImage) }
                         .tag(feature.id)
                 }
