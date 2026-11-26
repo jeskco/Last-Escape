@@ -6,6 +6,9 @@ on:
     paths: ['StikDebug-Merged/**', '.github/workflows/stikdebug-build.yml']
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -68,3 +71,13 @@ jobs:
         with:
           name: build-logs
           path: StikDebug-Merged/build-*.log
+
+      - name: Publish IPAs as a release (direct .ipa download, no zip)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="stikdebug-build-${{ github.run_number }}"
+          gh release create "$TAG" --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "StikDebug build ${{ github.run_number }}" \
+            --notes "Unsigned IPAs. Sign with Signulous. VPN = built-in tunnel; NoVPN = without it." \
+            StikDebug-Merged/StikDebug-VPN.ipa StikDebug-Merged/StikDebug-NoVPN.ipa
