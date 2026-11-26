@@ -43,51 +43,12 @@ enum ARMTheme {
     }
 }
 
-/// Blue gradient with slowly drifting translucent shapes, in the spirit of ARMSX2's PlayStation 2 menu wallpaper.
+/// ARMSX2's own PlayStation 2 menu wallpaper (towers, crystals, orbs and fog), animated behind the whole app.
 struct ARMBackground: View {
-    private struct Shape { let x, y, size, speed, phase: Double; let square: Bool }
-    private let shapes: [Shape] = (0..<18).map { i in
-        let f = Double(i)
-        return Shape(x: (f * 0.37).truncatingRemainder(dividingBy: 1),
-                     y: (f * 0.61).truncatingRemainder(dividingBy: 1),
-                     size: 14 + (f * 7).truncatingRemainder(dividingBy: 40),
-                     speed: 0.012 + (f * 0.003).truncatingRemainder(dividingBy: 0.02),
-                     phase: f * 1.7, square: i % 3 == 0)
-    }
-
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [ARMTheme.skyTop, ARMTheme.skyMid, ARMTheme.skyBottom],
-                           startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Color.white.opacity(0.14), .clear],
-                           center: UnitPoint(x: 0.5, y: 0.55), startRadius: 10, endRadius: 420)
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-                Canvas { context, size in
-                    let t = timeline.date.timeIntervalSinceReferenceDate
-                    // soft ribbons
-                    for k in 0..<3 {
-                        var path = Path()
-                        let base = size.height * (0.30 + 0.22 * Double(k))
-                        path.move(to: CGPoint(x: 0, y: base))
-                        for step in stride(from: 0.0, through: Double(size.width), by: 12) {
-                            let y = base + sin(step / 90 + t * 0.25 + Double(k)) * 34
-                            path.addLine(to: CGPoint(x: step, y: y))
-                        }
-                        context.stroke(path, with: .color(.white.opacity(0.07)), lineWidth: 26)
-                    }
-                    for s in shapes {
-                        let px = (s.x + sin(t * s.speed * 3 + s.phase) * 0.04) * size.width
-                        let py = ((s.y + t * s.speed).truncatingRemainder(dividingBy: 1)) * size.height
-                        let rect = CGRect(x: px, y: py, width: s.size, height: s.size)
-                        let path = s.square
-                            ? Path(roundedRect: rect, cornerRadius: 3)
-                            : Path(ellipseIn: rect)
-                        context.stroke(path, with: .color(.white.opacity(0.28)), lineWidth: 1.5)
-                    }
-                }
-            }
-        }
-        .ignoresSafeArea()
+        PlayStation2MenuBackground(theme: .blue)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
     }
 }
 
