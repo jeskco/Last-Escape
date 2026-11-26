@@ -210,6 +210,7 @@ struct InstalledAppsListView: View {
         let snapshot = debuggableSnapshot
 
         return List {
+            VPNStatusSection()
             connectionStatusSection
 
             if snapshot.apps.isEmpty && viewModel.hasConfirmedAppList {
@@ -225,12 +226,15 @@ struct InstalledAppsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .listRowBackground(ARMTheme.rowBackground)
     }
 
     private var launchAppsList: some View {
         let snapshot = launchSnapshot
 
         return List {
+            VPNStatusSection()
             connectionStatusSection
 
             if snapshot.apps.isEmpty && viewModel.hasConfirmedAppList {
@@ -246,6 +250,8 @@ struct InstalledAppsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .listRowBackground(ARMTheme.rowBackground)
     }
 
     @ViewBuilder

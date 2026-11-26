@@ -8,64 +8,86 @@ import SwiftUI
 import UIKit
 
 enum ARMTheme {
-    // Palette
-    static let accent = Color(red: 0.24, green: 0.56, blue: 1.0)          // Heny Blue
-    static let navyTop = Color(red: 0.063, green: 0.063, blue: 0.145)      // ~#101025, same as the ARMSX2 icon background
-    static let navyBottom = Color(red: 0.020, green: 0.020, blue: 0.067)
-    static let cardFill = Color.white.opacity(0.07)
-    static let cardStroke = Color.white.opacity(0.14)
-    static let cornerRadius: CGFloat = 16
+    // ARMSX2's PS2-menu look: deep royal blue, translucent glass, "Heny Blue" accent.
+    static let accent = Color(red: 0.36, green: 0.62, blue: 1.0)
+    static let skyTop = Color(red: 0.10, green: 0.20, blue: 0.62)
+    static let skyMid = Color(red: 0.07, green: 0.12, blue: 0.45)
+    static let skyBottom = Color(red: 0.02, green: 0.04, blue: 0.22)
+    static let cardFill = Color(red: 0.25, green: 0.42, blue: 0.95).opacity(0.28)
+    static let cardStroke = Color.white.opacity(0.22)
+    static let cornerRadius: CGFloat = 22
 
-    // Colours of the ARMSX2 cube, used for the soft background glows.
-    static let glowRed = Color(red: 0.93, green: 0.20, blue: 0.27)
-    static let glowOrange = Color(red: 1.00, green: 0.62, blue: 0.10)
-    static let glowGreen = Color(red: 0.28, green: 0.80, blue: 0.52)
-    static let glowBlue = Color(red: 0.25, green: 0.45, blue: 0.95)
+    /// Translucent blue glass used behind list rows.
+    static var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 0)
+            .fill(cardFill)
+    }
 
-    /// UIKit chrome (navigation bar, tab bar) can't be themed from SwiftUI alone.
     static func configureUIKitAppearance() {
         let nav = UINavigationBarAppearance()
         nav.configureWithTransparentBackground()
-        nav.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-        nav.backgroundColor = UIColor(navyTop).withAlphaComponent(0.55)
         nav.titleTextAttributes = [.foregroundColor: UIColor.white]
         nav.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
 
+        // Floating glass tab bar like ARMSX2's.
         let tab = UITabBarAppearance()
         tab.configureWithTransparentBackground()
-        tab.backgroundEffect = UIBlurEffect(style: .systemChromeMaterialDark)
-        tab.backgroundColor = UIColor(navyBottom).withAlphaComponent(0.7)
+        tab.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        tab.backgroundColor = UIColor(skyBottom).withAlphaComponent(0.35)
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
         UITabBar.appearance().tintColor = UIColor(accent)
     }
 }
 
-/// Dark navy gradient with four faint glows (red, orange, green, blue) like the ARMSX2 icon.
+/// Blue gradient with slowly drifting translucent shapes, in the spirit of ARMSX2's PlayStation 2 menu wallpaper.
 struct ARMBackground: View {
+    private struct Shape { let x, y, size, speed, phase: Double; let square: Bool }
+    private let shapes: [Shape] = (0..<18).map { i in
+        let f = Double(i)
+        return Shape(x: (f * 0.37).truncatingRemainder(dividingBy: 1),
+                     y: (f * 0.61).truncatingRemainder(dividingBy: 1),
+                     size: 14 + (f * 7).truncatingRemainder(dividingBy: 40),
+                     speed: 0.012 + (f * 0.003).truncatingRemainder(dividingBy: 0.02),
+                     phase: f * 1.7, square: i % 3 == 0)
+    }
+
     var body: some View {
         ZStack {
-            LinearGradient(colors: [ARMTheme.navyTop, ARMTheme.navyBottom], startPoint: .top, endPoint: .bottom)
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                glow(ARMTheme.glowRed, x: w * 0.85, y: h * 0.05, r: w * 0.55)
-                glow(ARMTheme.glowOrange, x: w * 0.05, y: h * 0.30, r: w * 0.50)
-                glow(ARMTheme.glowGreen, x: w * 0.95, y: h * 0.62, r: w * 0.50)
-                glow(ARMTheme.glowBlue, x: w * 0.10, y: h * 0.95, r: w * 0.60)
+            LinearGradient(colors: [ARMTheme.skyTop, ARMTheme.skyMid, ARMTheme.skyBottom],
+                           startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [Color.white.opacity(0.14), .clear],
+                           center: UnitPoint(x: 0.5, y: 0.55), startRadius: 10, endRadius: 420)
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+                Canvas { context, size in
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    // soft ribbons
+                    for k in 0..<3 {
+                        var path = Path()
+                        let base = size.height * (0.30 + 0.22 * Double(k))
+                        path.move(to: CGPoint(x: 0, y: base))
+                        for step in stride(from: 0.0, through: Double(size.width), by: 12) {
+                            let y = base + sin(step / 90 + t * 0.25 + Double(k)) * 34
+                            path.addLine(to: CGPoint(x: step, y: y))
+                        }
+                        context.stroke(path, with: .color(.white.opacity(0.07)), lineWidth: 26)
+                    }
+                    for s in shapes {
+                        let px = (s.x + sin(t * s.speed * 3 + s.phase) * 0.04) * size.width
+                        let py = ((s.y + t * s.speed).truncatingRemainder(dividingBy: 1)) * size.height
+                        let rect = CGRect(x: px, y: py, width: s.size, height: s.size)
+                        let path = s.square
+                            ? Path(roundedRect: rect, cornerRadius: 3)
+                            : Path(ellipseIn: rect)
+                        context.stroke(path, with: .color(.white.opacity(0.28)), lineWidth: 1.5)
+                    }
+                }
             }
         }
         .ignoresSafeArea()
-    }
-
-    private func glow(_ color: Color, x: CGFloat, y: CGFloat, r: CGFloat) -> some View {
-        Circle()
-            .fill(color.opacity(0.16))
-            .frame(width: r * 2, height: r * 2)
-            .blur(radius: r * 0.45)
-            .position(x: x, y: y)
     }
 }
 
@@ -73,7 +95,7 @@ struct ARMCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(14)
-            .background(.ultraThinMaterial.opacity(0.6), in: RoundedRectangle(cornerRadius: ARMTheme.cornerRadius, style: .continuous))
+            .background(.ultraThinMaterial.opacity(0.5), in: RoundedRectangle(cornerRadius: ARMTheme.cornerRadius, style: .continuous))
             .background(ARMTheme.cardFill, in: RoundedRectangle(cornerRadius: ARMTheme.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: ARMTheme.cornerRadius, style: .continuous)
@@ -95,53 +117,49 @@ extension View {
     func armCard() -> some View { modifier(ARMCard()) }
 }
 
-/// Status + switch for the built-in VPN. Hidden entirely in builds without the extension.
-struct VPNStatusCard: View {
+/// Status + switch for the built-in VPN, shown as the first list section. Hidden in builds without the extension.
+struct VPNStatusSection: View {
     @ObservedObject private var vpn = EmbeddedVPN.shared
 
     var body: some View {
-        if vpn.state == .unavailable {
-            EmptyView()
-        } else {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 12, height: 12)
-                    .shadow(color: color.opacity(0.5), radius: 5)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(vpn.state.title).font(.subheadline.weight(.semibold))
-                    Text(vpn.detail ?? "Loopback tunnel used to reach your own device")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                Spacer()
-                Button(vpn.state == .on ? "Stop" : "Connect") {
-                    vpn.state == .on ? vpn.stop() : vpn.start()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .disabled(vpn.state == .connecting)
-            }
-            .armCard()
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 4)
-            if vpn.state == .on {
-                VStack(alignment: .leading, spacing: 6) {
-                    Button("Test tunnel") { vpn.runProbe() }
-                        .buttonStyle(.bordered)
+        if vpn.state != .unavailable {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 10, height: 10)
+                            .shadow(color: color.opacity(0.6), radius: 4)
+                        Text(vpn.state.title)
+                            .font(.headline)
+                        Spacer(minLength: 8)
+                        Button(vpn.state == .on ? "Stop" : "Connect") {
+                            vpn.state == .on ? vpn.stop() : vpn.start()
+                        }
+                        .buttonStyle(.borderedProminent)
                         .controlSize(.small)
-                    if let report = vpn.probeReport {
-                        Text(report)
-                            .font(.system(.caption2, design: .monospaced))
-                            .textSelection(.enabled)
-                            .foregroundStyle(.secondary)
+                        .disabled(vpn.state == .connecting)
+                    }
+
+                    Text(vpn.detail ?? "Loopback tunnel used to reach your own device")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if vpn.state == .on {
+                        Button("Test tunnel") { vpn.runProbe() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        if let report = vpn.probeReport {
+                            Text(report)
+                                .font(.system(.caption2, design: .monospaced))
+                                .textSelection(.enabled)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
             }
         }
     }

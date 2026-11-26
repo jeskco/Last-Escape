@@ -53,7 +53,6 @@ struct HomeView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { VPNStatusCard() }
         .onAppear(perform: handleAppear)
         .onReceive(NotificationCenter.default.publisher(for: .intentJSScriptReady), perform: handleScriptReadyNotification)
         .onOpenURL { url in
