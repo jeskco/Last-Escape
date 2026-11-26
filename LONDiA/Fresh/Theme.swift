@@ -2,8 +2,8 @@
 import SwiftUI
 import Combine
 
-extension Item: Identifiable { public var id: String { iid } }
-extension Drop: Identifiable { public var id: String { did } }
+extension Item: Identifiable { var id: String { iid } }
+extension Drop: Identifiable { var id: String { did } }
 
 /// Bridges the shared core's globals into SwiftUI: every `Changed()` bumps `rev`, so views re-read.
 final class LDStore: ObservableObject {
