@@ -78,6 +78,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
     
+    // The app asks the extension to run connectivity checks from inside this process.
+    override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let results = TunnelProbe.runExtensionChecks(port: 62078)
+            completionHandler?(try? JSONEncoder().encode(results))
+        }
+    }
+
     func setPackets() {
         packetFlow.readPackets { [self] packets, protocols in
             var modified = packets

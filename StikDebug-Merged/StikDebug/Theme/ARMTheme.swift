@@ -128,6 +128,21 @@ struct VPNStatusCard: View {
             .padding(.horizontal, 16)
             .padding(.top, 6)
             .padding(.bottom, 4)
+            if vpn.state == .on {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button("Test tunnel") { vpn.runProbe() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    if let report = vpn.probeReport {
+                        Text(report)
+                            .font(.system(.caption2, design: .monospaced))
+                            .textSelection(.enabled)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+            }
         }
     }
 

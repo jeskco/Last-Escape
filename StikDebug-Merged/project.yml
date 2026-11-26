@@ -14,6 +14,7 @@ targets:
     platform: iOS
     deploymentTarget: "17.4"
     sources:
+      - path: StikDebug/Services/TunnelProbe.swift
       - path: VPNTunnel
         excludes:
           - Info.plist

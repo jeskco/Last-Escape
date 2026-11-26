@@ -95,6 +95,40 @@ final class EmbeddedVPN: ObservableObject {
         manager?.connection.stopVPNTunnel()
     }
 
+    // MARK: - Tunnel self-test
+
+    @Published private(set) var probeReport: String?
+
+    /// Compares what the app can reach with what code inside the extension can reach.
+    func runProbe() {
+        guard state == .on, let session = manager?.connection as? NETunnelProviderSession else {
+            probeReport = "Connect the VPN first."
+            return
+        }
+        probeReport = "Testing…"
+        let appCheck = Task.detached {
+            TunnelProbe.connect(label: "app → 10.7.0.1", host: "10.7.0.1", port: 62078)
+        }
+        do {
+            try session.sendProviderMessage(Data("probe".utf8)) { [weak self] reply in
+                Task { @MainActor in
+                    let app = await appCheck.value
+                    let ext = reply.flatMap { try? JSONDecoder().decode([TunnelProbeResult].self, from: $0) } ?? []
+                    var lines = [app] + ext
+                    if ext.isEmpty {
+                        lines.append(TunnelProbeResult(label: "extension", outcome: "error",
+                                                       detail: "no reply from the extension", ms: 0))
+                    }
+                    self?.probeReport = lines
+                        .map { "\($0.label): \($0.outcome) \($0.ms)ms \($0.detail)" }
+                        .joined(separator: "\n")
+                }
+            }
+        } catch {
+            probeReport = "Could not message the extension: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Internals
 
     @discardableResult
