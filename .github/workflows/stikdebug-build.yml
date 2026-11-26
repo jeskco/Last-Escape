@@ -80,4 +80,4 @@ jobs:
           gh release create "$TAG" --repo "${{ github.repository }}" --target "${{ github.sha }}" \
             --title "StikDebug build ${{ github.run_number }}" \
             --notes "Unsigned IPAs. Sign with Signulous. VPN = built-in tunnel; NoVPN = without it." \
-            StikDebug-Merged/StikDebug-VPN.ipa StikDebug-Merged/StikDebug-NoVPN.ipa
+            StikDebug-VPN.ipa StikDebug-NoVPN.ipa
