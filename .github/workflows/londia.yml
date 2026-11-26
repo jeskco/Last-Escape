@@ -1,0 +1,58 @@
+name: Build LONDiA (Swift)
+on:
+  push:
+    branches: [londia-swift]
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: LONDiA
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$X" ]; then X=$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1); fi
+          sudo xcode-select -s "$X"; xcodebuild -version | tee xcode_version.txt
+      - name: Generate project
+        run: brew install xcodegen && xcodegen generate
+      - name: Build all apps
+        run: |
+          mkdir -p out; : > out/errors.txt; FAILED=0
+          for S in ${SCHEMES:-LONDiA LONDiAAdmin LONDiANew LONDiAAdminNew}; do
+            if [ -f "../.skip_$S" ]; then echo "$S skipped" >> out/status_detail.txt; continue; fi
+            set +e
+            xcodebuild -project LONDiA.xcodeproj -scheme $S -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+              -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build_$S.log 2>&1
+            RC=$?; set -e
+            if [ $RC -ne 0 ]; then
+              FAILED=1; echo "$S FAILED" >> out/status_detail.txt
+              { echo "== $S"; grep -E "error:|fatal error" build_$S.log | sed 's#.*/LONDiA/LONDiA/##' | sort -u | head -60; } >> out/errors.txt
+              tail -120 build_$S.log > out/tail_$S.log
+            else
+              echo "$S ok" >> out/status_detail.txt
+              APP=build/Build/Products/Release-iphoneos/$S.app
+              rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/ && zip -qry out/$S.ipa Payload
+            fi
+          done
+          echo "FAILED=$FAILED" >> $GITHUB_ENV
+      - name: Report errors
+        if: env.FAILED == '1'
+        run: |
+          n=0; while IFS= read -r l; do n=$((n+1)); g=$(( (n-1)/9 )); echo "$l" >> chunk_$g.txt; done < out/errors.txt
+          for f in chunk_*.txt; do echo "::error title=$(basename $f)::$(sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g' $f)"; done
+      - name: Publish
+        if: always()
+        run: |
+          cp xcode_version.txt out/ 2>/dev/null || true
+          echo "run ${{ github.run_number }} failed=$FAILED $(date -u)" > out/status.txt
+          cd out && git init -q && git checkout -q -b londia-swift-builds && git add -A
+          git -c user.name="londia-ci" -c user.email="ci@users.noreply.github.com" commit -qm "Build ${{ github.run_number }}"
+          for i in 1 2 3 4; do git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" londia-swift-builds && break; sleep 8; done
+      - name: Fail if any app failed
+        if: env.FAILED == '1'
+        run: exit 1

@@ -1,0 +1,70 @@
+name: LONDiA
+options:
+  bundleIdPrefix: com.londia
+  deploymentTarget:
+    iOS: "16.4"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "5.0"
+    CURRENT_PROJECT_VERSION: "400"
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: Info/Info.plist
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGNING_ALLOWED: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+targetTemplates:
+  LDApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: Resources
+        excludes: ["img/**", "hires/**"]
+        buildPhase: resources
+      - path: Resources/img
+        type: folder
+        buildPhase: resources
+      - path: Resources/hires
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - sdk: PhotosUI.framework
+targets:
+  LONDiA:
+    templates: [LDApp]
+    sources: [Classic]
+    settings:
+      base:
+        PRODUCT_NAME: LONDiA
+        PRODUCT_BUNDLE_IDENTIFIER: com.londia.app
+        LD_DISPLAY_NAME: LONDiA USA
+  LONDiAAdmin:
+    templates: [LDApp]
+    sources: [Classic]
+    settings:
+      base:
+        PRODUCT_NAME: LONDiAAdmin
+        PRODUCT_BUNDLE_IDENTIFIER: com.londia.admin
+        LD_DISPLAY_NAME: LONDiA ADMIN
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LD_ADMIN"
+  LONDiANew:
+    templates: [LDApp]
+    sources: [Fresh]
+    deploymentTarget: "17.0"
+    settings:
+      base:
+        PRODUCT_NAME: LONDiANew
+        PRODUCT_BUNDLE_IDENTIFIER: com.londia.app.new
+        LD_DISPLAY_NAME: LONDiA New
+  LONDiAAdminNew:
+    templates: [LDApp]
+    sources: [Fresh]
+    deploymentTarget: "17.0"
+    settings:
+      base:
+        PRODUCT_NAME: LONDiAAdminNew
+        PRODUCT_BUNDLE_IDENTIFIER: com.londia.admin.new
+        LD_DISPLAY_NAME: LONDiA Admin New
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LD_ADMIN"

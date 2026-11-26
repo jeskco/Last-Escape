@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleDisplayName</key><string>$(LD_DISPLAY_NAME)</string>
+	<key>CFBundleName</key><string>$(LD_DISPLAY_NAME)</string>
+	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>Christmas2</key><dict><key>CFBundleIconFiles</key><array><string>AppIconChristmasB60x60</string></array></dict>
+			<key>Halloween2</key><dict><key>CFBundleIconFiles</key><array><string>AppIconHalloweenB60x60</string></array></dict>
+			<key>Thanksgiving2</key><dict><key>CFBundleIconFiles</key><array><string>AppIconThanksgivingB60x60</string></array></dict>
+			<key>White2</key><dict><key>CFBundleIconFiles</key><array><string>AppIconWhiteB60x60</string></array></dict>
+		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array>
+		</dict>
+	</dict>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>UIAppFonts</key><array><string>VtksSportage.ttf</string><string>TommysFirstAlphabet.ttf</string></array>
+	<key>UIDeviceFamily</key><array><integer>1</integer></array>
+	<key>UILaunchScreen</key><dict><key>UIImageName</key><string>LaunchRed</string><key>UIImageRespectsSafeAreaInsets</key><false/></dict>
+	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+	<key>UIRequiresFullScreen</key><true/>
+	<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+	<key>UIViewControllerBasedStatusBarAppearance</key><true/>
+	<key>NSPhotoLibraryUsageDescription</key><string>Pick product photos to upload.</string>
+</dict>
+</plist>
