@@ -51,9 +51,21 @@ final class RemotePairingPortResolver {
             NSLog("[StikDebug] Ignoring invalid manual Remote Pairing port: %@", override)
         }
 
-        let result = discover(targetIPAddress: targetIPAddress, timeout: timeout)
+        var result = discover(targetIPAddress: targetIPAddress, timeout: timeout)
+        if result.source == "Bonjour" {
+            // Remember it: Bonjour often can't see the service without Wi-Fi, but the port usually stays the same.
+            UserDefaults.standard.set(Int(result.port), forKey: cachedPortKey)
+        } else if let cached = cachedPort {
+            result = (cached, "Cached")
+        }
         record(targetIPAddress: targetIPAddress, port: result.port, source: result.source)
         return result.port
+    }
+
+    private static let cachedPortKey = "TunnelRemotePairingPortLastSeen"
+    private static var cachedPort: UInt16? {
+        let value = UserDefaults.standard.integer(forKey: cachedPortKey)
+        return (1...65535).contains(value) ? UInt16(value) : nil
     }
 
     static func discover(targetIPAddress: String = DeviceConnectionContext.targetIPAddress, timeout: TimeInterval = 5) -> (port: UInt16, source: String) {

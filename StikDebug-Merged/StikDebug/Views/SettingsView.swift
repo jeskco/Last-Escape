@@ -230,9 +230,13 @@ struct SettingsView: View {
                 RemotePairingPortResolver.discover()
             }.value
             guard !Task.isCancelled else { return }
+            if result.source == "Bonjour" {
+                UserDefaults.standard.set(Int(result.port), forKey: "TunnelRemotePairingPortLastSeen")
+            }
+            let cached = UserDefaults.standard.integer(forKey: "TunnelRemotePairingPortLastSeen")
             automaticPortPlaceholder = result.source == "Bonjour"
                 ? "Bonjour (\(result.port))"
-                : "Fallback (\(result.port))"
+                : (cached > 0 ? "Cached (\(cached))" : "Fallback (\(result.port))")
         }
         .onChange(of: focusedConnectionField) { _, field in
             if field == nil {
