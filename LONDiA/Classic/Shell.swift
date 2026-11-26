@@ -1,4 +1,4 @@
-// ===== shell: wordmark, splash, root tab pager, settings card, app delegate (classic) =====
+// ===== shell: wordmark, splash, root curTab pager, settings card, app delegate (classic) =====
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 import UserNotifications
@@ -61,7 +61,7 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
   var setCard: UIView?, setHost: SettingsHost?; var setVC: ProfileVC?; var setOpenTop: CGFloat = 0
   let top = UIView(); var lockup = UIView(); let pager = UIScrollView(); var screens: [SettingsHost] = []
   let tabBar = UIView(); var tabBtns: [UIButton] = [], tabIcons: [UIImageView] = [], tabLbls: [UILabel] = []
-  var badgeS = UILabel(), badgeB = UILabel(), badgeR = UILabel(); var tab = 0; var launched = false; var obs: [NSObjectProtocol] = []
+  var badgeS = UILabel(), badgeB = UILabel(), badgeR = UILabel(); var curTab = 0; var launched = false; var obs: [NSObjectProtocol] = []
   let nTabs = 5
   override func viewDidLoad() {
     super.viewDidLoad(); buildAll(); let nc = NotificationCenter.default
@@ -93,14 +93,14 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
     }
     badgeS = UILabel(); badgeB = UILabel(); badgeR = UILabel()
     for b in [badgeS, badgeB, badgeR] { b.backgroundColor = cRed(); b.textColor = .white; b.font = Fc(9); b.textAlignment = .center; b.layer.cornerRadius = 8; b.layer.masksToBounds = true; b.isUserInteractionEnabled = false; tabBar.addSubview(b) }
-    styleTabs(tab); updateBadges(); if let c = setCard { view.bringSubviewToFront(c) }
+    styleTabs(curTab); updateBadges(); if let c = setCard { view.bringSubviewToFront(c) }
   }
   @objc func logoTap() { Hap(1); if setCard != nil { closeSettings() } else { openSettings() } }
   func openSettings() {
     if setCard != nil { return }
-    if tab == 0, let fv = screens.first as? FeedView, fv.exOpen { return }
-    if tab == 1, let iv = screens[1] as? IndexView, iv.ex { return }
-    if tab < screens.count { openSettingsInHost(screens[tab]) }
+    if curTab == 0, let fv = screens.first as? FeedView, fv.exOpen { return }
+    if curTab == 1, let iv = screens[1] as? IndexView, iv.ex { return }
+    if curTab < screens.count { openSettingsInHost(screens[curTab]) }
   }
   @objc func settingsPan(_ g: UIPanGestureRecognizer) {
     guard let ct = setCard, let host = setHost else { return }
@@ -108,11 +108,11 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
     switch g.state {
     case .began:
       host.settingsRestore(); if let wrap = ct.superview { wrap.superview?.bringSubviewToFront(wrap) }
-      if tab == 0, let fv = host as? FeedView { fv.chips.forEach { $0.alpha = 0 }; fv.dot.alpha = 0 }
+      if curTab == 0, let fv = host as? FeedView { fv.chips.forEach { $0.alpha = 0 }; fv.dot.alpha = 0 }
     case .changed:
       let maxDown = host.bounds.height - setOpenTop + 40, dy = min(max(0, tr.y), maxDown)
       ct.transform = CGAffineTransform(translationX: 0, y: dy)
-      if tab == 0, let fv = host as? FeedView { let p = min(1, dy / max(1, maxDown)); fv.chips.forEach { $0.alpha = p }; fv.dot.alpha = p }
+      if curTab == 0, let fv = host as? FeedView { let p = min(1, dy / max(1, maxDown)); fv.chips.forEach { $0.alpha = p }; fv.dot.alpha = p }
     case .ended, .cancelled:
       if g.state == .ended && (tr.y > 90 || v.y > 700) { Hap(1); closeSettingsInHost() }
       else { host.settingsMode(true); spring(0.42, 0.86, opts: [.allowUserInteraction], { ct.transform = .identity }) }
@@ -122,8 +122,8 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
   func closeSettings() { if setHost != nil { closeSettingsInHost() } }
   func openSettingsInHost(_ host: SettingsHost) {
     var cr: CGRect
-    if tab == 0 { guard let fv = host as? FeedView, let card = fv.card else { return }; cr = fv.convert(card.bounds, from: card); cr.size.height -= fv.bottomInset }
-    else if tab == 1 { cr = R(0, 0, host.bounds.width, host.bounds.height - host.bottomInset) }
+    if curTab == 0 { guard let fv = host as? FeedView, let card = fv.card else { return }; cr = fv.convert(card.bounds, from: card); cr.size.height -= fv.bottomInset }
+    else if curTab == 1 { cr = R(0, 0, host.bounds.width, host.bounds.height - host.bottomInset) }
     else { cr = R(0, 8, host.bounds.width, host.bounds.height - 8 - host.bottomInset) }
     setOpenTop = cr.origin.y
     let cw = UIView(); cw.tag = 991; cw.frame = cr; cw.clipsToBounds = true; host.addSubview(cw)
@@ -148,8 +148,8 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
     anim(0.4, opts: [.curveEaseIn], { ct.transform = CGAffineTransform(translationX: 0, y: down) })
     after(0.41) { pv?.willMove(toParent: nil); pv?.view.removeFromSuperview(); pv?.removeFromParent(); cw?.removeFromSuperview() }
   }
-  @objc func tabTap(_ b: UIButton) { if setCard != nil { closeSettings() }; if b.tag != tab { Hap(1) }; goTab(b.tag, true) }
-  func goTab(_ i: Int, _ a: Bool) { let i = max(0, min(nTabs - 1, i)); tab = i; pager.setContentOffset(CGPoint(x: CGFloat(i) * pager.bounds.width, y: 0), animated: a); styleTabs(i) }
+  @objc func tabTap(_ b: UIButton) { if setCard != nil { closeSettings() }; if b.tag != curTab { Hap(1) }; goTab(b.tag, true) }
+  func goTab(_ i: Int, _ a: Bool) { let i = max(0, min(nTabs - 1, i)); curTab = i; pager.setContentOffset(CGPoint(x: CGFloat(i) * pager.bounds.width, y: 0), animated: a); styleTabs(i) }
   func styleTabs(_ sel: Int) {
     let names = ["house", "text.alignleft", "drop", "heart", "bag"], fills = ["house.fill", "text.alignleft", "drop.fill", "heart.fill", "bag.fill"], lb = ["Shop", "Index", "Drops", "Saved", "Bag"]
     top.backgroundColor = cPanel()
@@ -178,7 +178,7 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
     pager.frame = R(0, topH, W, H - topH); pager.contentSize = CGSize(width: W * CGFloat(nTabs), height: H - topH)
     for s in screens { s.bottomInset = tabH; s.setNeedsLayout() }
     for (i, s) in screens.enumerated() { s.frame = R(CGFloat(i) * W, 0, W, H - topH) }
-    pager.contentOffset = CGPoint(x: CGFloat(tab) * W, y: 0)
+    pager.contentOffset = CGPoint(x: CGFloat(curTab) * W, y: 0)
     tabBar.frame = R(0, H - tabH, W, tabH); let bw = W / CGFloat(nTabs)
     for i in 0..<tabBtns.count { tabBtns[i].frame = R(CGFloat(i) * bw, 0, bw, 56); tabIcons[i].frame = R(0, 9, bw, 24); tabLbls[i].frame = R(0, 34, bw, 16) }
     view.bringSubviewToFront(tabBar); layoutBadges()
@@ -186,7 +186,7 @@ final class RootVC: UIViewController, UIScrollViewDelegate {
   func scrollViewDidScroll(_ s: UIScrollView) {
     guard s === pager, s.bounds.width >= 1 else { return }
     let t = max(0, min(nTabs - 1, Int((s.contentOffset.x / s.bounds.width).rounded())))
-    if t != tab { tab = t; styleTabs(t); Hap(1) }
+    if t != curTab { curTab = t; styleTabs(t); Hap(1) }
   }
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated); if launched { return }; launched = true
