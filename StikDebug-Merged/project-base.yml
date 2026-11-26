@@ -1,0 +1,68 @@
+name: StikDebug
+options:
+  bundleIdPrefix: com.stik
+  deploymentTarget:
+    iOS: "17.4"
+  createIntermediateGroups: true
+  developmentLanguage: en
+packages:
+  CodeEditorView:
+    url: https://github.com/mchakravarty/CodeEditorView
+    from: 0.15.4
+targets:
+  StikDebug:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.4"
+    sources:
+      - path: StikDebug
+        excludes:
+          - Info.plist
+          - "*.entitlements"
+          - "idevice/**"
+    dependencies:
+      - package: CodeEditorView
+        product: CodeEditorView
+      - package: CodeEditorView
+        product: LanguageSupport
+      - framework: StikDebug/idevice/libidevice_ffi.a
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stik.stikdebug
+        PRODUCT_NAME: StikDebug
+        MARKETING_VERSION: "3.2.2"
+        CURRENT_PROJECT_VERSION: "1"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_ENTITLEMENTS: StikDebug/StikDebug.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: ARMIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: "NO"
+        CLANG_ENABLE_MODULES: "YES"
+        ENABLE_PREVIEWS: "NO"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_FILE: StikDebug/Info.plist
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: "YES"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: StikDebug needs access to devices on your local network so it can connect to the targets you add to the Device Library.
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: StikDebug uses location to stay running in the background and maintain your JIT connection.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: StikDebug uses location to stay running in the background and maintain your JIT connection.
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleDefault
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
+        INFOPLIST_KEY_UISupportsDocumentBrowser: "YES"
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/Frameworks"
+        HEADER_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/StikDebug/idevice"
+        LIBRARY_SEARCH_PATHS: "$(inherited) $(PROJECT_DIR)/StikDebug/idevice"
+        SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_DIR)/StikDebug/idevice"
+        SWIFT_VERSION: "5.0"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+        LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
+        SUPPORTS_MACCATALYST: "NO"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO"
+        TARGETED_DEVICE_FAMILY: "1,2"

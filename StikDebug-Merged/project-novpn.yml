@@ -1,0 +1,4 @@
+# "No built-in VPN" build: plain StikDebug with the new look. Uses the external LocalDevVPN app.
+# Use this one if your signing service can't grant the Network Extension entitlement.
+include:
+  - project-base.yml

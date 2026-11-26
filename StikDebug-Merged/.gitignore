@@ -1,0 +1,6 @@
+StikDebug.xcodeproj/
+build/
+Payload/
+*.ipa
+.DS_Store
+StikDebug/idevice/libidevice_ffi.a

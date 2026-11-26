@@ -1,0 +1,36 @@
+# "With built-in VPN" build: StikDebug + the VPNTunnel packet-tunnel extension.
+include:
+  - project-base.yml
+targets:
+  StikDebug:
+    dependencies:
+      - target: VPNTunnel
+        embed: true
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: StikDebug/StikDebug-VPN.entitlements
+  VPNTunnel:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.4"
+    sources:
+      - path: VPNTunnel
+        excludes:
+          - Info.plist
+          - "*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stik.stikdebug.VPNTunnel
+        PRODUCT_NAME: VPNTunnel
+        MARKETING_VERSION: "3.2.2"
+        CURRENT_PROJECT_VERSION: "1"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_ENTITLEMENTS: VPNTunnel/VPNTunnel.entitlements
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: VPNTunnel/Info.plist
+        SKIP_INSTALL: "YES"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"

@@ -1,0 +1,70 @@
+name: Build StikDebug IPAs
+
+on:
+  push:
+    branches: [stikdebug-merged]
+    paths: ['StikDebug-Merged/**', '.github/workflows/stikdebug-build.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: StikDebug-Merged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The prebuilt idevice Rust library is 57 MB, so it is fetched from the StikDebug repo
+      # at the exact commit this project was based on instead of being stored here.
+      - name: Download idevice library
+        run: |
+          mkdir upstream && cd upstream
+          git init -q
+          git remote add origin https://github.com/StephenDev0/StikDebug.git
+          git fetch --depth 1 origin 63713ea2100660dc7066ee0e8d962858026f97aa
+          git checkout -q FETCH_HEAD -- StikDebug/idevice/libidevice_ffi.a
+          cd ..
+          cp upstream/StikDebug/idevice/libidevice_ffi.a StikDebug/idevice/
+          ls -la StikDebug/idevice
+
+      - name: Build (with built-in VPN)
+        run: |
+          set -o pipefail
+          xcodegen generate --spec project.yml
+          xcodebuild -project StikDebug.xcodeproj -scheme StikDebug -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-vpn \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-vpn.log | tail -n 60
+          APP=$(find build-vpn/Build/Products -maxdepth 2 -name "StikDebug.app" | head -n 1)
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qr ../StikDebug-VPN.ipa Payload)
+
+      - name: Build (without built-in VPN)
+        run: |
+          set -o pipefail
+          rm -rf StikDebug.xcodeproj out
+          xcodegen generate --spec project-novpn.yml
+          xcodebuild -project StikDebug.xcodeproj -scheme StikDebug -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-novpn \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-novpn.log | tail -n 60
+          APP=$(find build-novpn/Build/Products -maxdepth 2 -name "StikDebug.app" | head -n 1)
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qr ../StikDebug-NoVPN.ipa Payload)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StikDebug-IPAs
+          path: |
+            StikDebug-Merged/StikDebug-VPN.ipa
+            StikDebug-Merged/StikDebug-NoVPN.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: StikDebug-Merged/build-*.log
