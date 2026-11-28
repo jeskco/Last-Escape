@@ -30,7 +30,7 @@ struct MatchDetailView: View {
                     else {
                         switch tab {
                         case 0: overview
-                        case 1: GameCastView(match: match, shots: detail?.shots ?? [])
+                        case 1: GameCastView(match: match, detail: detail)
                         case 2: stats
                         case 3: players
                         default: plays

@@ -3,14 +3,15 @@ import SwiftUI
 /// ESPN-GameCast-style live view: the sport's playing surface with circles for the ball, runners and shots.
 struct GameCastView: View {
     let match: Match
-    let shots: [ShotMark]
+    let detail: MatchDetail?
+    private var shots: [ShotMark] { detail?.shots ?? [] }
 
     var body: some View {
         VStack(spacing: 14) {
             switch match.sport {
             case .nfl: FootballField(match: match)
             case .mlb: BaseballDiamond(match: match)
-            case .nba: ShotChart(match: match, shots: shots, kind: .basketball)
+            case .nba: BasketballCast(match: match, detail: detail)
             case .nhl: ShotChart(match: match, shots: shots, kind: .hockey)
             case .atp, .wta: TennisCast(match: match)
             }

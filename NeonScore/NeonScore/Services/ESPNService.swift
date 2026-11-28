@@ -84,6 +84,38 @@ struct ESPNService {
             return PlayItem(time: time, text: text, scoring: p["scoringPlay"].bool ?? !scoring.isEmpty)
         }
 
+        // Roster (jersey numbers, starters) for the animated court.
+        var seen = Set<String>()
+        for teamBlock in json["boxscore"]["players"].array {
+            let teamId = teamBlock["team"]["id"].string ?? ""
+            for stat in teamBlock["statistics"].array {
+                for a in stat["athletes"].array {
+                    guard let name = a["athlete"]["displayName"].string, seen.insert("\(teamId)\(name)").inserted else { continue }
+                    d.roster.append(RosterPlayer(name: name, jersey: a["athlete"]["jersey"].string ?? "",
+                                                 starter: a["starter"].bool ?? false, teamId: teamId))
+                }
+            }
+        }
+
+        // Full chronological play list for the replay.
+        var lastAway = 0, lastHome = 0
+        for (i, p) in json["plays"].array.enumerated() {
+            lastAway = p["awayScore"].int ?? lastAway
+            lastHome = p["homeScore"].int ?? lastHome
+            guard let text = p["text"].string else { continue }
+            let c = p["coordinate"]
+            var x = c["x"].double, y = c["y"].double
+            if let xv = x, let yv = y, abs(xv) > 1000 || abs(yv) > 1000 { x = nil; y = nil }
+            d.cast.append(CastPlay(id: i, period: p["period"]["number"].int ?? 1,
+                                   clock: p["clock"]["displayValue"].string ?? "",
+                                   text: text, type: p["type"]["text"].string ?? "",
+                                   teamId: p["team"]["id"].string,
+                                   shooting: p["shootingPlay"].bool ?? false,
+                                   scoring: p["scoringPlay"].bool ?? false,
+                                   points: p["scoreValue"].int ?? 0, x: x, y: y,
+                                   away: lastAway, home: lastHome))
+        }
+
         // Located plays (shots) for the court / rink view.
         for p in json["plays"].array {
             let c = p["coordinate"]
