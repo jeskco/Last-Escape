@@ -31,6 +31,12 @@ struct ESPNService {
         return MatchParser.scoreboard(json, sport: sport)
     }
 
+    /// Fresh copy of one game (score, clock, field situation) from the scoreboard.
+    func refreshed(_ match: Match) async throws -> Match? {
+        let list = try await scoreboard(match.sport, date: match.start ?? Date())
+        return list.first { $0.id == match.id }
+    }
+
     func detail(for match: Match) async throws -> MatchDetail {
         let json = try await fetch("\(base)/site/v2/sports/\(match.sport.path)/summary?event=\(match.id)")
         var d = MatchDetail()
@@ -76,6 +82,17 @@ struct ESPNService {
             let period = p["period"]["displayValue"].string ?? p["period"]["number"].string ?? ""
             let time = [period, clock].filter { !$0.isEmpty }.joined(separator: " ")
             return PlayItem(time: time, text: text, scoring: p["scoringPlay"].bool ?? !scoring.isEmpty)
+        }
+
+        // Located plays (shots) for the court / rink view.
+        for p in json["plays"].array {
+            let c = p["coordinate"]
+            guard let x = c["x"].double, let y = c["y"].double, abs(x) < 1000, abs(y) < 1000 else { continue }
+            let text = p["text"].string ?? ""
+            let made = p["scoringPlay"].bool ?? false
+            let isShot = p["shootingPlay"].bool ?? (match.sport == .nhl)
+            guard isShot || made else { continue }
+            d.shots.append(ShotMark(x: x, y: y, made: made, teamId: p["team"]["id"].string, text: text))
         }
 
         let pick = json["pickcenter"][0]

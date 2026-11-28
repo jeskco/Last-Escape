@@ -2,10 +2,17 @@ import SwiftUI
 
 struct MatchDetailView: View {
     @EnvironmentObject var store: AppStore
-    let match: Match
+    let initialMatch: Match
+    @State private var live: Match?
     @State private var detail: MatchDetail?
     @State private var tab = 0
     @State private var failed = false
+    private var match: Match { live ?? initialMatch }
+
+    init(match: Match) {
+        self.initialMatch = match
+        _tab = State(initialValue: match.state == .live ? 1 : 0)
+    }
     @State private var loading = true
 
     var body: some View {
@@ -15,7 +22,7 @@ struct MatchDetailView: View {
                 VStack(spacing: 16) {
                     header
                     Picker("", selection: $tab) {
-                        Text("Overview").tag(0); Text("Stats").tag(1); Text("Players").tag(2); Text("Plays").tag(3)
+                        Text("Overview").tag(0); Text("Cast").tag(1); Text("Stats").tag(2); Text("Players").tag(3); Text("Plays").tag(4)
                     }
                     .pickerStyle(.segmented).padding(.horizontal, 16)
 
@@ -23,8 +30,9 @@ struct MatchDetailView: View {
                     else {
                         switch tab {
                         case 0: overview
-                        case 1: stats
-                        case 2: players
+                        case 1: GameCastView(match: match, shots: detail?.shots ?? [])
+                        case 2: stats
+                        case 3: players
                         default: plays
                         }
                     }
@@ -42,10 +50,19 @@ struct MatchDetailView: View {
                 }
             }
         }
-        .task { await load() }
+        .task {
+            await load()
+            // Keep a live game moving without pulling to refresh.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard match.state == .live else { continue }
+                await load()
+            }
+        }
     }
 
     private func load() async {
+        if let fresh = try? await ESPNService.shared.refreshed(match) { live = fresh }
         do { detail = try await ESPNService.shared.detail(for: match); failed = false }
         catch { failed = true }
         loading = false

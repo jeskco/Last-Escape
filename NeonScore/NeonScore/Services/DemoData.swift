@@ -17,10 +17,14 @@ enum DemoData {
                     m("2", .finished, "Final", side("c", "Denver Nuggets", "DEN", "118", winner: true), side("d", "Phoenix Suns", "PHX", "109")),
                     m("3", .upcoming, "7:30 PM", side("e", "Miami Heat", "MIA", ""), side("f", "New York Knicks", "NYK", ""))]
         case .nfl:
-            return [m("1", .live, "Q2 2:10", side("a", "Kansas City Chiefs", "KC", "17", ["7", "10"]), side("b", "Buffalo Bills", "BUF", "14", ["7", "7"])),
+            var live = m("1", .live, "Q2 2:10", side("a", "Kansas City Chiefs", "KC", "17", ["7", "10"]), side("b", "Buffalo Bills", "BUF", "14", ["7", "7"]))
+            live.situation = Situation(downDistance: "2nd & 6 at BUF 38", yardLine: 38, possessionId: "a")
+            return [live,
                     m("2", .upcoming, "3:25 PM", side("c", "Dallas Cowboys", "DAL", ""), side("d", "Philadelphia Eagles", "PHI", ""))]
         case .mlb:
-            return [m("1", .live, "Top 6th", side("a", "New York Yankees", "NYY", "4"), side("b", "Boston Red Sox", "BOS", "2")),
+            var live = m("1", .live, "Top 6th", side("a", "New York Yankees", "NYY", "4"), side("b", "Boston Red Sox", "BOS", "2"))
+            live.situation = Situation(balls: 2, strikes: 1, outs: 1, onFirst: true, onThird: true, batter: "A. Judge", pitcher: "B. Bello")
+            return [live,
                     m("2", .finished, "Final", side("c", "LA Dodgers", "LAD", "6", winner: true), side("d", "San Diego Padres", "SD", "3"))]
         case .nhl:
             return [m("1", .live, "P2 8:33", side("a", "Toronto Maple Leafs", "TOR", "2"), side("b", "Montreal Canadiens", "MTL", "2")),

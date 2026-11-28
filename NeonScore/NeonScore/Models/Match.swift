@@ -15,6 +15,21 @@ struct Side: Hashable {
     var colorHex: String?
 }
 
+struct Situation: Hashable {
+    var downDistance: String?      // "1st & 10 at KC 42"
+    var yardLine: Int?
+    var possessionId: String?
+    var redZone = false
+    var balls: Int?
+    var strikes: Int?
+    var outs: Int?
+    var onFirst = false
+    var onSecond = false
+    var onThird = false
+    var batter: String?
+    var pitcher: String?
+}
+
 struct Match: Identifiable, Hashable {
     var id: String
     var sport: Sport
@@ -27,6 +42,7 @@ struct Match: Identifiable, Hashable {
     var venue: String?
     var broadcast: String?
     var odds: String?
+    var situation: Situation? = nil
 }
 
 enum MatchParser {
@@ -125,11 +141,25 @@ enum MatchParser {
         let broadcast = comp["broadcasts"][0]["names"][0].string ?? comp["broadcast"].string
         let odds = comp["odds"][0]["details"].string
 
+        var situation: Situation?
+        let sit = comp["situation"]
+        if sit.exists {
+            situation = Situation(
+                downDistance: sit["downDistanceText"].string ?? sit["shortDownDistanceText"].string,
+                yardLine: sit["yardLine"].int,
+                possessionId: sit["possession"].string,
+                redZone: sit["isRedZone"].bool ?? false,
+                balls: sit["balls"].int, strikes: sit["strikes"].int, outs: sit["outs"].int,
+                onFirst: sit["onFirst"].bool ?? false, onSecond: sit["onSecond"].bool ?? false, onThird: sit["onThird"].bool ?? false,
+                batter: sit["batter"]["athlete"]["displayName"].string,
+                pitcher: sit["pitcher"]["athlete"]["displayName"].string)
+        }
+
         return Match(id: comp["id"].string ?? event["id"].string ?? UUID().uuidString,
                      sport: sport, group: group, state: state, statusText: text, start: start,
                      home: side(homeC, tennis: tennis), away: side(awayC, tennis: tennis),
                      venue: comp["venue"]["fullName"].string ?? event["venue"]["displayName"].string,
-                     broadcast: broadcast, odds: odds)
+                     broadcast: broadcast, odds: odds, situation: situation)
     }
 }
 
@@ -190,7 +220,17 @@ struct PlayItem: Identifiable, Hashable {
     var scoring: Bool
 }
 
+struct ShotMark: Identifiable, Hashable {
+    var id = UUID()
+    var x: Double
+    var y: Double
+    var made: Bool
+    var teamId: String?
+    var text: String
+}
+
 struct MatchDetail {
+    var shots: [ShotMark] = []
     var stats: [StatLine] = []
     var players: [PlayerTable] = []
     var plays: [PlayItem] = []
