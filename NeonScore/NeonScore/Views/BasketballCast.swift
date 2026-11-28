@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Animated full-court replay driven by the play-by-play feed.
-/// Player positions other than the shooter are an illustrative formation, not optical tracking.
+/// Each play runs as a short sequence (passes, shooter cut, shot, result). Positions other than the shooter
+/// are an illustrative formation, not optical tracking.
 struct BasketballCast: View {
     let match: Match
     let detail: MatchDetail?
@@ -9,15 +10,14 @@ struct BasketballCast: View {
     @State private var idx = 0
     @State private var playing = false
     @State private var speed = 1.0
-    @State private var flying = false
-    @State private var flash = false
     @State private var follow = true
     @State private var started = false
-    // Gliding between formations: 10 players + ball.
+    @State private var playStart = Date()
+    // Gliding between formations: 10 players.
     @State private var prevPts: [CGPoint] = []
     @State private var targetPts: [CGPoint] = []
     @State private var changedAt = Date.distantPast
-    private let glide = 0.8
+    private let glide = 0.9
 
     private var plays: [CastPlay] { detail?.cast ?? [] }
     private var current: CastPlay? { plays.indices.contains(idx) ? plays[idx] : nil }
@@ -29,41 +29,47 @@ struct BasketballCast: View {
         VStack(spacing: 12) {
             if plays.isEmpty {
                 VStack(spacing: 10) {
-                    court(positions: [], ball: CGPoint(x: 47, y: 25))
+                    court(positions: [])
                     Text("The animated replay starts once the game has play-by-play data.")
                         .font(.footnote).foregroundStyle(Neon.textDim).multilineTextAlignment(.center)
                 }
             } else {
                 scoreBar
-                court(positions: playerPositions(), ball: ballPosition())
+                court(positions: playerPositions())
                 if let p = current {
                     Text(p.text).font(.footnote).foregroundStyle(.white.opacity(0.85))
                         .frame(maxWidth: .infinity, alignment: .leading).neonCard()
                 }
                 controls
                 MarginChart(plays: plays, index: idx, away: match.away, home: match.home)
-                Text("Replay built from play-by-play. Shooter and ball are placed from tracked shot locations; other players show a typical formation, not live tracking.")
+                Text("Replay built from play-by-play. The shooter and ball are placed from the shot data; other players show a typical formation, not live tracking.")
                     .font(.caption2).foregroundStyle(Neon.textDim).multilineTextAlignment(.center)
             }
         }
         .onChange(of: plays.count) { _, new in
             guard new > 0 else { return }
-            if !started { started = true; idx = new - 1 }
-            else if follow && match.state == .live { jump(to: new - 1) }
+            if !started { startReplay() }
         }
-        .onAppear {
-            if !plays.isEmpty && !started { started = true; idx = plays.count - 1 }
-            retarget(snap: true)
-        }
+        .onAppear { if !plays.isEmpty && !started { startReplay() } }
         .onChange(of: idx) { _, _ in retarget() }
-        .onChange(of: flying) { _, _ in retarget() }
-        .onChange(of: plays.count) { _, _ in retarget() }
         .task(id: playing) {
             while playing && !Task.isCancelled {
-                if idx >= plays.count - 1 { playing = false; break }
+                if idx >= plays.count - 1 {
+                    // Live game: wait for the next play. Finished game: stop.
+                    if match.state == .live { try? await Task.sleep(nanoseconds: 1_000_000_000); continue }
+                    playing = false; break
+                }
                 await advance()
             }
         }
+    }
+
+    private func startReplay() {
+        started = true
+        idx = max(0, plays.count - 8)      // begin a few plays before the latest one and play forward
+        playStart = Date()
+        retarget(snap: true)
+        playing = true
     }
 
     // MARK: Gliding
@@ -79,7 +85,7 @@ struct BasketballCast: View {
         guard !plays.isEmpty else { return }
         let now = Date()
         let old = snap || targetPts.isEmpty ? nil : blended(at: now)
-        let next = playerPositions().map { $0.pos } + [ballPosition()]
+        let next = playerPositions().map { $0.pos }
         prevPts = old ?? next
         targetPts = next
         changedAt = snap ? .distantPast : now
@@ -87,19 +93,23 @@ struct BasketballCast: View {
 
     // MARK: Playback
 
+    private func isShot(_ p: CastPlay?) -> Bool {
+        guard let p else { return false }
+        return p.shooting || p.type.lowercased().contains("free throw")
+    }
+
+    private func duration(for p: CastPlay?) -> Double { isShot(p) ? 3.6 : 1.8 }
+
     private func advance() async {
-        flying = false; flash = false
-        idx += 1
         let s = max(speed, 0.5)
-        try? await Task.sleep(nanoseconds: UInt64(450_000_000 / s))
-        withAnimation(.easeInOut(duration: 0.5 / s)) { flying = true }
-        if current?.scoring == true { withAnimation(.easeOut(duration: 0.4)) { flash = true } }
-        try? await Task.sleep(nanoseconds: UInt64(900_000_000 / s))
+        idx += 1
+        playStart = Date()
+        try? await Task.sleep(nanoseconds: UInt64(duration(for: current) / s * 1_000_000_000))
     }
 
     private func jump(to i: Int) {
-        flying = false; flash = false
-        withAnimation(.easeInOut(duration: 0.5)) { idx = min(max(i, 0), max(plays.count - 1, 0)) }
+        idx = min(max(i, 0), max(plays.count - 1, 0))
+        playStart = Date()
     }
 
     // MARK: Geometry
@@ -116,10 +126,8 @@ struct BasketballCast: View {
         return nil
     }
 
-    private var attackRight: Bool {
-        // The away side attacks the right basket, the home side the left one.
-        possessionTeam(at: idx) != match.home.id
-    }
+    /// The away side attacks the right basket, the home side the left one.
+    private var attackRight: Bool { possessionTeam(at: idx) != match.home.id }
 
     private func roster(_ teamId: String) -> [RosterPlayer] {
         let all = (detail?.roster ?? []).filter { $0.teamId == teamId }
@@ -127,50 +135,44 @@ struct BasketballCast: View {
         return Array(ordered.prefix(5))
     }
 
-    private var offenseTeam: Side { attackRight ? match.away : match.home }
+    private func slots(right: Bool) -> (off: [CGPoint], def: [CGPoint]) {
+        let off: [(Double, Double)] = [(63, 25), (74, 8), (74, 42), (83, 13), (82, 33)]
+        let def: [(Double, Double)] = [(68, 25), (79, 12), (79, 38), (86, 19), (85, 31)]
+        func f(_ s: (Double, Double)) -> CGPoint { CGPoint(x: right ? s.0 : courtW - s.0, y: s.1) }
+        return (off.map(f), def.map(f))
+    }
 
-    /// 10 circles: first 5 = away, last 5 = home, in court units.
+    /// 10 circles: first 5 = away, last 5 = home.
     private func playerPositions() -> [CourtPlayer] {
         let right = attackRight
-        let offSlots: [(Double, Double)] = [(64, 25), (75, 9), (75, 41), (84, 14), (81, 31)]
-        let defSlots: [(Double, Double)] = [(70, 25), (80, 13), (80, 37), (86.5, 20), (85.5, 30)]
-        func place(_ s: (Double, Double), _ k: Int) -> CGPoint {
-            let jx = sin(Double(idx) * 1.7 + Double(k)) * 1.4, jy = cos(Double(idx) * 1.3 + Double(k) * 2) * 1.4
-            let x = s.0 + jx, y = s.1 + jy
-            return CGPoint(x: right ? x : courtW - x, y: y)
-        }
+        let sl = slots(right: right)
         let awayRoster = roster(match.away.id), homeRoster = roster(match.home.id)
-        let awayOffense = right
         var out: [CourtPlayer] = []
         for k in 0..<5 {
-            let slot = awayOffense ? offSlots[k] : defSlots[k]
-            out.append(CourtPlayer(team: .away, jersey: k < awayRoster.count ? awayRoster[k].jersey : "", name: k < awayRoster.count ? awayRoster[k].name : "", pos: place(slot, k)))
+            out.append(CourtPlayer(team: .away, jersey: k < awayRoster.count ? awayRoster[k].jersey : "",
+                                   name: k < awayRoster.count ? awayRoster[k].name : "",
+                                   pos: right ? sl.off[k] : sl.def[k]))
         }
         for k in 0..<5 {
-            let slot = awayOffense ? defSlots[k] : offSlots[k]
-            out.append(CourtPlayer(team: .home, jersey: k < homeRoster.count ? homeRoster[k].jersey : "", name: k < homeRoster.count ? homeRoster[k].name : "", pos: place(slot, k + 5)))
-        }
-        // Move the shooter to the tracked shot spot.
-        if flying, let p = current, p.shooting || p.type.lowercased().contains("free throw"), let spot = shotSpot(p) {
-            let offenseIsAway = attackRight
-            let range = offenseIsAway ? 0..<5 : 5..<10
-            let first = last(name: shooterName(p), in: out, range: range)
-            out[first].pos = spot
+            out.append(CourtPlayer(team: .home, jersey: k < homeRoster.count ? homeRoster[k].jersey : "",
+                                   name: k < homeRoster.count ? homeRoster[k].name : "",
+                                   pos: right ? sl.def[k] : sl.off[k]))
         }
         return out
     }
 
-    private func last(name: String?, in list: [CourtPlayer], range: Range<Int>) -> Int {
-        if let name, let i = range.first(where: { !list[$0].name.isEmpty && name.hasPrefix(list[$0].name) }) { return i }
-        return range.lowerBound
+    /// Which of the five offensive players took this shot (matched on the name at the start of the play text).
+    private func shooterSlot(_ p: CastPlay?) -> Int {
+        guard let p else { return 4 }
+        let team = roster(attackRight ? match.away.id : match.home.id)
+        if let i = team.firstIndex(where: { !$0.name.isEmpty && p.text.hasPrefix($0.name) }) { return i }
+        return 4
     }
 
-    private func shooterName(_ p: CastPlay) -> String? { p.text }
-
-    private func shotSpot(_ p: CastPlay) -> CGPoint? {
+    private func shotSpot(_ p: CastPlay) -> CGPoint {
         let right = attackRight
         if p.type.lowercased().contains("free throw") { return CGPoint(x: right ? 94 - 5.25 - 15 : 5.25 + 15, y: 25) }
-        guard var x = p.x, var y = p.y else { return nil }
+        guard var x = p.x, var y = p.y else { return CGPoint(x: right ? 70 : 24, y: 25) }
         if y > 47 { y = 94 - y; x = 50 - x }
         x = min(max(x, 0), 50); y = min(max(y, 0), 47)
         return CGPoint(x: right ? 94 - y : y, y: right ? x : 50 - x)
@@ -178,12 +180,95 @@ struct BasketballCast: View {
 
     private var basket: CGPoint { CGPoint(x: attackRight ? 94 - 5.25 : 5.25, y: 25) }
 
-    private func ballPosition() -> CGPoint {
-        let ps = playerPositions()
-        let range = attackRight ? 0..<5 : 5..<10
-        let handler = current.map { last(name: $0.text, in: ps, range: range) } ?? range.lowerBound
-        if flying, let p = current, p.shooting || p.type.lowercased().contains("free throw") { return basket }
-        return ps[handler].pos
+    private func ease(_ x: Double) -> Double { let c = min(max(x, 0), 1); return c * c * (3 - 2 * c) }
+
+    /// Light off-ball movement so nobody ever stands completely still.
+    private func sway(_ k: Int, _ t: Double, offense: Bool) -> CGPoint {
+        let slot = Double(k % 5)
+        let amp = offense ? 1.7 : 1.3
+        let tt = t - (offense ? 0 : 0.4)
+        return CGPoint(x: sin(tt * (0.8 + slot * 0.12) + slot * 1.9) * amp,
+                       y: cos(tt * (0.6 + slot * 0.1) + slot * 2.7) * amp * 0.8)
+    }
+
+    private struct Frame { var players: [CGPoint]; var ball: CGPoint; var ballScale: CGFloat; var flash: Bool }
+
+    private func frame(at date: Date, positions: [CourtPlayer]) -> Frame {
+        let t = date.timeIntervalSinceReferenceDate
+        let base = blended(at: date)
+        var pts: [CGPoint] = positions.enumerated().map { i, p in
+            let a = base.count > i ? base[i] : p.pos
+            let m = sway(i, t, offense: (i < 5) == attackRight)
+            return CGPoint(x: a.x + m.x, y: a.y + m.y)
+        }
+        guard pts.count == 10, let play = current else { return Frame(players: pts, ball: CGPoint(x: 47, y: 25), ballScale: 1, flash: false) }
+
+        let s = date.timeIntervalSince(playStart) * max(speed, 0.5)
+        let offBase = attackRight ? 0 : 5
+        let shooting = isShot(play)
+        let shooter = shooterSlot(play)
+        let chainA = (shooter + 2) % 5, chainB = (shooter + 4) % 5
+        func off(_ k: Int) -> CGPoint { pts[offBase + k] }
+
+        var ball = off(chainA)
+        var scale: CGFloat = 1
+        var flash = false
+
+        if shooting {
+            let spot = shotSpot(play)
+            // The shooter cuts to the shot location before shooting.
+            let cut = ease((s - 0.9) / 0.9)
+            let from = pts[offBase + shooter]
+            pts[offBase + shooter] = CGPoint(x: from.x + (spot.x - from.x) * cut, y: from.y + (spot.y - from.y) * cut)
+            let shooterPos = pts[offBase + shooter]
+            let freeThrow = play.type.lowercased().contains("free throw")
+
+            if freeThrow || s < 0.5 && false {
+                ball = shooterPos
+            } else if s < 0.5 {
+                ball = dribble(off(chainA), s)
+            } else if s < 1.0 {
+                ball = lerp(off(chainA), off(chainB), ease((s - 0.5) / 0.4))
+            } else if s < 1.6 {
+                ball = lerp(off(chainB), shooterPos, ease((s - 1.0) / 0.4))
+            } else if s < 2.0 {
+                ball = dribble(shooterPos, s)
+            }
+            if freeThrow { ball = dribble(shooterPos, s) }
+            if s >= 2.0 {
+                let p = min((s - 2.0) / 0.7, 1)
+                let hoop = basket
+                ball = CGPoint(x: shooterPos.x + (hoop.x - shooterPos.x) * p,
+                               y: shooterPos.y + (hoop.y - shooterPos.y) * p - sin(p * .pi) * 6)
+                scale = 1 + CGFloat(sin(p * .pi)) * 0.7
+                if p >= 1 {
+                    if play.scoring {
+                        flash = true
+                        let drop = min((s - 2.7) / 0.4, 1)
+                        ball = CGPoint(x: hoop.x, y: hoop.y + drop * 1.6)
+                    } else {
+                        // Rim out and bounce away toward where the rebound will be.
+                        let q = min((s - 2.7) / 0.6, 1)
+                        let out = CGPoint(x: hoop.x + (attackRight ? -6 : 6), y: hoop.y + (shooterPos.y > 25 ? 5 : -5))
+                        ball = CGPoint(x: hoop.x + (out.x - hoop.x) * q, y: hoop.y + (out.y - hoop.y) * q - sin(q * .pi) * 2.5)
+                    }
+                }
+            }
+        } else {
+            // Non-shot plays: hold the ball, make one pass.
+            if s < 0.7 { ball = dribble(off(chainA), s) }
+            else if s < 1.2 { ball = lerp(off(chainA), off(chainB), ease((s - 0.7) / 0.5)) }
+            else { ball = dribble(off(chainB), s) }
+        }
+        return Frame(players: pts, ball: ball, ballScale: scale, flash: flash)
+    }
+
+    private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: Double) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+    }
+
+    private func dribble(_ p: CGPoint, _ s: Double) -> CGPoint {
+        CGPoint(x: p.x + 1.3, y: p.y - abs(sin(s * 7)) * 1.2)
     }
 
     // MARK: UI
@@ -204,56 +289,18 @@ struct BasketballCast: View {
         .neonCard(highlight: match.state == .live)
     }
 
-    /// Continuous movement layered over the formation so the court is never still.
-    private func motion(_ k: Int, _ t: Double, offense: Bool) -> CGPoint {
-        let slot = Double(k % 5)
-        let amp = offense ? 3.4 : 2.6
-        let lag = offense ? 0.0 : 0.35   // defenders trail their man
-        let tt = t - lag
-        return CGPoint(x: sin(tt * (0.7 + slot * 0.13) + slot * 1.9) * amp,
-                       y: cos(tt * (0.55 + slot * 0.11) + slot * 2.7) * amp * 0.8)
-    }
-
-    private func court(positions: [CourtPlayer], ball: CGPoint) -> some View {
+    private func court(positions: [CourtPlayer]) -> some View {
         GeometryReader { g in
             let w = g.size.width, h = g.size.height
             let sx = w / courtW, sy = h / courtH
             TimelineView(.animation) { timeline in
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                let base = blended(at: timeline.date)
-                let moved: [CGPoint] = positions.enumerated().map { i, p in
-                    let offense = (i < 5) == attackRight
-                    let anchor = base.count > i ? base[i] : p.pos
-                    // A defender mirrors the matching offensive player's movement.
-                    let m = motion(i, t, offense: offense)
-                    return CGPoint(x: anchor.x + m.x, y: anchor.y + m.y)
-                }
-                let ballBase = base.count > 10 ? base[10] : ball
-                let shooting = flying && current.map { $0.shooting || $0.type.lowercased().contains("free throw") } == true
-                let ballPoint: CGPoint = {
-                    if shooting || moved.count < 10 { return ballBase }
-                    // Pass the ball around the offense, dribbling in between.
-                    let base = attackRight ? 0 : 5
-                    let cycle = t / 1.5
-                    let n = Int(floor(cycle))
-                    let f = cycle - floor(cycle)
-                    let from = moved[base + (n % 5)]
-                    let to = moved[base + ((n + 2) % 5)]
-                    if f < 0.55 {
-                        return CGPoint(x: from.x + 1.2, y: from.y + abs(sin(f * 18)) * -1.6)
-                    }
-                    let e = (f - 0.55) / 0.45
-                    let eased = e * e * (3 - 2 * e)
-                    return CGPoint(x: from.x + (to.x - from.x) * eased,
-                                   y: from.y + (to.y - from.y) * eased - sin(eased * .pi) * 3)
-                }()
+                let f = frame(at: timeline.date, positions: positions)
                 ZStack {
                     RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.03, green: 0.09, blue: 0.13))
                     courtLines(w: w, h: h)
-                    Circle().fill(flash ? Neon.cyan.opacity(0.5) : .clear)
-                        .frame(width: 44, height: 44)
+                    Circle().fill(f.flash ? Neon.cyan.opacity(0.55) : .clear)
+                        .frame(width: 46, height: 46)
                         .position(x: basket.x * sx, y: basket.y * sy)
-                        .scaleEffect(flash ? 1.4 : 0.6)
                     ForEach(Array(positions.enumerated()), id: \.offset) { i, p in
                         let color = p.team == .away ? Neon.magenta : Neon.cyan
                         ZStack {
@@ -262,11 +309,14 @@ struct BasketballCast: View {
                         }
                         .frame(width: 24, height: 24)
                         .shadow(color: color.opacity(0.9), radius: (p.team == .away) == attackRight ? 6 : 2)
-                        .position(x: moved[i].x * sx, y: moved[i].y * sy)
+                        .position(x: f.players[i].x * sx, y: f.players[i].y * sy)
                     }
-                    Circle().fill(Color.orange).frame(width: 11, height: 11)
-                        .shadow(color: .orange, radius: 5)
-                        .position(x: ballPoint.x * sx, y: ballPoint.y * sy)
+                    if !positions.isEmpty {
+                        Circle().fill(Color.orange).frame(width: 11, height: 11)
+                            .scaleEffect(f.ballScale)
+                            .shadow(color: .orange, radius: 5)
+                            .position(x: f.ball.x * sx, y: f.ball.y * sy)
+                    }
                 }
             }
         }
@@ -300,7 +350,7 @@ struct BasketballCast: View {
             HStack(spacing: 14) {
                 Button { jump(to: idx - 1); playing = false; follow = false } label: { Image(systemName: "backward.frame.fill") }
                 Button {
-                    if idx >= plays.count - 1 { idx = 0 }
+                    if idx >= plays.count - 1 { jump(to: max(0, plays.count - 8)) }
                     playing.toggle(); follow = false
                 } label: {
                     Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 34)).foregroundStyle(Neon.cyan)
@@ -312,7 +362,7 @@ struct BasketballCast: View {
                         .background(Neon.surfaceHigh, in: Capsule())
                 }
                 if match.state == .live {
-                    Button { follow = true; playing = false; jump(to: plays.count - 1) } label: {
+                    Button { follow = true; jump(to: plays.count - 1); playing = true } label: {
                         Text("LIVE").font(.caption.weight(.heavy)).padding(.horizontal, 10).padding(.vertical, 5)
                             .foregroundStyle(follow ? Neon.black : Neon.magenta)
                             .background(follow ? AnyShapeStyle(Neon.magenta) : AnyShapeStyle(Neon.magenta.opacity(0.15)), in: Capsule())
@@ -320,7 +370,7 @@ struct BasketballCast: View {
                 }
             }
             .buttonStyle(.plain).foregroundStyle(.white)
-            Slider(value: Binding(get: { Double(idx) }, set: { idx = Int($0); flying = false; flash = false; playing = false; follow = false }),
+            Slider(value: Binding(get: { Double(idx) }, set: { idx = Int($0); playStart = Date(); playing = false; follow = false }),
                    in: 0...Double(max(plays.count - 1, 1)))
                 .tint(Neon.cyan)
         }
