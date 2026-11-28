@@ -22,4 +22,7 @@ struct GameAttributes: ActivityAttributes {
     var broadcast: String = ""
     var odds: String = ""
     var startDate: Date? = nil
+    /// Tiny JPEG thumbnails: Live Activities can't load images from the network.
+    var awayLogo: Data? = nil
+    var homeLogo: Data? = nil
 }

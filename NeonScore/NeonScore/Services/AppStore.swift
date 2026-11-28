@@ -94,7 +94,7 @@ final class AppStore: ObservableObject {
         } else {
             favoriteMatches.insert(k); favoriteMatchSnapshots[k] = m
             Notifier.requestAuthorization()
-            if m.state != .finished { LiveActivityManager.shared.start(m) }
+            if m.state != .finished { Task { await LiveActivityManager.shared.start(m) } }
             Notifier.scheduleStart(m)
         }
     }

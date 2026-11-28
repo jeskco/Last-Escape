@@ -1,6 +1,7 @@
 import Foundation
 import ActivityKit
 import UserNotifications
+import UIKit
 
 @MainActor
 final class LiveActivityManager: ObservableObject {
@@ -20,18 +21,41 @@ final class LiveActivityManager: ObservableObject {
         Activity<GameAttributes>.activities.first { $0.attributes.matchId == id }
     }
 
-    func start(_ m: Match) {
+    /// Downloads a logo and shrinks it to a small JPEG on the widget's dark background.
+    private func thumbnail(_ url: URL?, pixels: CGFloat, quality: CGFloat) async -> Data? {
+        guard let url, let (data, _) = try? await URLSession.shared.data(from: url), let image = UIImage(data: data) else { return nil }
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
+        let size = CGSize(width: pixels, height: pixels)
+        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            UIColor(red: 0.03, green: 0.03, blue: 0.06, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            let scale = min(pixels / image.size.width, pixels / image.size.height)
+            let w = image.size.width * scale, h = image.size.height * scale
+            image.draw(in: CGRect(x: (pixels - w) / 2, y: (pixels - h) / 2, width: w, height: h))
+        }
+        return rendered.jpegData(compressionQuality: quality)
+    }
+
+    func start(_ m: Match) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             status = "Live Activities are off. Turn them on in Settings > NeonScore."
             return
         }
         guard existing(m.id) == nil else { return }
-        let attributes = GameAttributes(matchId: m.id, sport: m.sport.rawValue,
+        var attributes = GameAttributes(matchId: m.id, sport: m.sport.rawValue,
                                         awayShort: m.away.short, homeShort: m.home.short,
                                         awayName: m.away.name, homeName: m.home.name,
                                         awayRecord: m.away.record ?? "", homeRecord: m.home.record ?? "",
                                         venue: m.venue ?? "", broadcast: m.broadcast ?? "",
                                         odds: m.odds ?? "", startDate: m.start)
+        // ActivityKit allows about 4 KB for attributes + state, so shrink the logos until they fit.
+        for (pixels, quality) in [(CGFloat(44), CGFloat(0.55)), (CGFloat(36), CGFloat(0.45)), (CGFloat(28), CGFloat(0.4))] {
+            attributes.awayLogo = await thumbnail(m.away.logo, pixels: pixels, quality: quality)
+            attributes.homeLogo = await thumbnail(m.home.logo, pixels: pixels, quality: quality)
+            let size = ((try? JSONEncoder().encode(attributes))?.count ?? 0) + ((try? JSONEncoder().encode(contentState(m)))?.count ?? 0)
+            if size < 3500 { break }
+            if pixels == 28 { attributes.awayLogo = nil; attributes.homeLogo = nil }
+        }
         do {
             _ = try Activity.request(attributes: attributes,
                                      content: .init(state: contentState(m), staleDate: nil), pushType: nil)

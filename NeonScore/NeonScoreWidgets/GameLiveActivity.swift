@@ -2,6 +2,20 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
+private struct Logo: View {
+    let data: Data?
+    let fallback: String
+    var size: CGFloat = 44
+    var body: some View {
+        if let data, let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFit().frame(width: size, height: size)
+        } else {
+            Text(String(fallback.prefix(3))).font(.system(size: size * 0.3, weight: .heavy))
+                .frame(width: size, height: size).background(Color.white.opacity(0.1), in: Circle())
+        }
+    }
+}
+
 private enum C {
     static let cyan = Color(red: 0.0, green: 0.90, blue: 1.0)
     static let magenta = Color(red: 1.0, green: 0.17, blue: 0.84)
@@ -22,11 +36,13 @@ struct GameLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack { Text(context.attributes.awayShort).font(.caption.bold()).foregroundStyle(C.magenta)
+                    VStack { Logo(data: context.attributes.awayLogo, fallback: context.attributes.awayShort, size: 30)
+                             Text(context.attributes.awayShort).font(.caption.bold()).foregroundStyle(C.magenta)
                              Text(context.state.awayScore).font(.title.bold().monospacedDigit()) }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack { Text(context.attributes.homeShort).font(.caption.bold()).foregroundStyle(C.cyan)
+                    VStack { Logo(data: context.attributes.homeLogo, fallback: context.attributes.homeShort, size: 30)
+                             Text(context.attributes.homeShort).font(.caption.bold()).foregroundStyle(C.cyan)
                              Text(context.state.homeScore).font(.title.bold().monospacedDigit()) }
                 }
                 DynamicIslandExpandedRegion(.center) {
@@ -42,9 +58,11 @@ struct GameLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Text("\(context.attributes.awayShort) \(context.state.awayScore)").font(.caption2.bold()).foregroundStyle(C.magenta)
+                HStack(spacing: 4) { Logo(data: context.attributes.awayLogo, fallback: context.attributes.awayShort, size: 18)
+                    Text(context.state.awayScore).font(.caption.bold().monospacedDigit()).foregroundStyle(C.magenta) }
             } compactTrailing: {
-                Text("\(context.state.homeScore) \(context.attributes.homeShort)").font(.caption2.bold()).foregroundStyle(C.cyan)
+                HStack(spacing: 4) { Text(context.state.homeScore).font(.caption.bold().monospacedDigit()).foregroundStyle(C.cyan)
+                    Logo(data: context.attributes.homeLogo, fallback: context.attributes.homeShort, size: 18) }
             } minimal: {
                 Image(systemName: "bolt.fill").foregroundStyle(C.cyan)
             }
@@ -111,7 +129,8 @@ private struct LockScreenView: View {
 
     private func team(_ short: String, _ name: String, _ record: String, _ color: Color, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 3) {
-            Text(short).font(.title.weight(.heavy)).foregroundStyle(color)
+            Logo(data: alignment == .leading ? attributes.awayLogo : attributes.homeLogo, fallback: short, size: 48)
+            Text(short).font(.title3.weight(.heavy)).foregroundStyle(color)
             Text(name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             if !record.isEmpty { Text(record).font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.8)) }
         }
