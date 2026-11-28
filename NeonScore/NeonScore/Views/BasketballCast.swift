@@ -13,6 +13,11 @@ struct BasketballCast: View {
     @State private var flash = false
     @State private var follow = true
     @State private var started = false
+    // Gliding between formations: 10 players + ball.
+    @State private var prevPts: [CGPoint] = []
+    @State private var targetPts: [CGPoint] = []
+    @State private var changedAt = Date.distantPast
+    private let glide = 0.8
 
     private var plays: [CastPlay] { detail?.cast ?? [] }
     private var current: CastPlay? { plays.indices.contains(idx) ? plays[idx] : nil }
@@ -46,13 +51,38 @@ struct BasketballCast: View {
             if !started { started = true; idx = new - 1 }
             else if follow && match.state == .live { jump(to: new - 1) }
         }
-        .onAppear { if !plays.isEmpty && !started { started = true; idx = plays.count - 1 } }
+        .onAppear {
+            if !plays.isEmpty && !started { started = true; idx = plays.count - 1 }
+            retarget(snap: true)
+        }
+        .onChange(of: idx) { _, _ in retarget() }
+        .onChange(of: flying) { _, _ in retarget() }
+        .onChange(of: plays.count) { _, _ in retarget() }
         .task(id: playing) {
             while playing && !Task.isCancelled {
                 if idx >= plays.count - 1 { playing = false; break }
                 await advance()
             }
         }
+    }
+
+    // MARK: Gliding
+
+    private func blended(at date: Date) -> [CGPoint] {
+        guard targetPts.count == prevPts.count, !targetPts.isEmpty else { return targetPts }
+        let x = min(max(date.timeIntervalSince(changedAt) / (glide / max(speed, 0.5)), 0), 1)
+        let e = 1 - pow(1 - x, 3)
+        return zip(prevPts, targetPts).map { CGPoint(x: $0.x + ($1.x - $0.x) * e, y: $0.y + ($1.y - $0.y) * e) }
+    }
+
+    private func retarget(snap: Bool = false) {
+        guard !plays.isEmpty else { return }
+        let now = Date()
+        let old = snap || targetPts.isEmpty ? nil : blended(at: now)
+        let next = playerPositions().map { $0.pos } + [ballPosition()]
+        prevPts = old ?? next
+        targetPts = next
+        changedAt = snap ? .distantPast : now
     }
 
     // MARK: Playback
@@ -174,34 +204,70 @@ struct BasketballCast: View {
         .neonCard(highlight: match.state == .live)
     }
 
+    /// Continuous movement layered over the formation so the court is never still.
+    private func motion(_ k: Int, _ t: Double, offense: Bool) -> CGPoint {
+        let slot = Double(k % 5)
+        let amp = offense ? 3.4 : 2.6
+        let lag = offense ? 0.0 : 0.35   // defenders trail their man
+        let tt = t - lag
+        return CGPoint(x: sin(tt * (0.7 + slot * 0.13) + slot * 1.9) * amp,
+                       y: cos(tt * (0.55 + slot * 0.11) + slot * 2.7) * amp * 0.8)
+    }
+
     private func court(positions: [CourtPlayer], ball: CGPoint) -> some View {
         GeometryReader { g in
             let w = g.size.width, h = g.size.height
             let sx = w / courtW, sy = h / courtH
-            ZStack {
-                RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.03, green: 0.09, blue: 0.13))
-                courtLines(w: w, h: h)
-                Circle().fill(flash ? Neon.cyan.opacity(0.5) : .clear)
-                    .frame(width: 44, height: 44)
-                    .position(x: basket.x * sx, y: basket.y * sy)
-                    .scaleEffect(flash ? 1.4 : 0.6)
-                ForEach(Array(positions.enumerated()), id: \.offset) { i, p in
-                    let color = p.team == .away ? Neon.magenta : Neon.cyan
-                    ZStack {
-                        Circle().fill(Neon.black).overlay(Circle().stroke(color, lineWidth: 2))
-                        Text(p.jersey).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
-                    }
-                    .frame(width: 24, height: 24)
-                    .shadow(color: color.opacity(0.9), radius: (p.team == .away) == attackRight ? 6 : 2)
-                    .position(x: p.pos.x * sx, y: p.pos.y * sy)
-                    .animation(.easeInOut(duration: 0.7 / max(speed, 0.5)), value: idx)
-                    .id(i)
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let base = blended(at: timeline.date)
+                let moved: [CGPoint] = positions.enumerated().map { i, p in
+                    let offense = (i < 5) == attackRight
+                    let anchor = base.count > i ? base[i] : p.pos
+                    // A defender mirrors the matching offensive player's movement.
+                    let m = motion(i, t, offense: offense)
+                    return CGPoint(x: anchor.x + m.x, y: anchor.y + m.y)
                 }
-                Circle().fill(Color.orange).frame(width: 11, height: 11)
-                    .shadow(color: .orange, radius: 5)
-                    .position(x: ball.x * sx, y: ball.y * sy)
-                    .animation(.easeInOut(duration: 0.5 / max(speed, 0.5)), value: flying)
-                    .animation(.easeInOut(duration: 0.7 / max(speed, 0.5)), value: idx)
+                let ballBase = base.count > 10 ? base[10] : ball
+                let shooting = flying && current.map { $0.shooting || $0.type.lowercased().contains("free throw") } == true
+                let ballPoint: CGPoint = {
+                    if shooting || moved.count < 10 { return ballBase }
+                    // Pass the ball around the offense, dribbling in between.
+                    let base = attackRight ? 0 : 5
+                    let cycle = t / 1.5
+                    let n = Int(floor(cycle))
+                    let f = cycle - floor(cycle)
+                    let from = moved[base + (n % 5)]
+                    let to = moved[base + ((n + 2) % 5)]
+                    if f < 0.55 {
+                        return CGPoint(x: from.x + 1.2, y: from.y + abs(sin(f * 18)) * -1.6)
+                    }
+                    let e = (f - 0.55) / 0.45
+                    let eased = e * e * (3 - 2 * e)
+                    return CGPoint(x: from.x + (to.x - from.x) * eased,
+                                   y: from.y + (to.y - from.y) * eased - sin(eased * .pi) * 3)
+                }()
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.03, green: 0.09, blue: 0.13))
+                    courtLines(w: w, h: h)
+                    Circle().fill(flash ? Neon.cyan.opacity(0.5) : .clear)
+                        .frame(width: 44, height: 44)
+                        .position(x: basket.x * sx, y: basket.y * sy)
+                        .scaleEffect(flash ? 1.4 : 0.6)
+                    ForEach(Array(positions.enumerated()), id: \.offset) { i, p in
+                        let color = p.team == .away ? Neon.magenta : Neon.cyan
+                        ZStack {
+                            Circle().fill(Neon.black).overlay(Circle().stroke(color, lineWidth: 2))
+                            Text(p.jersey).font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
+                        }
+                        .frame(width: 24, height: 24)
+                        .shadow(color: color.opacity(0.9), radius: (p.team == .away) == attackRight ? 6 : 2)
+                        .position(x: moved[i].x * sx, y: moved[i].y * sy)
+                    }
+                    Circle().fill(Color.orange).frame(width: 11, height: 11)
+                        .shadow(color: .orange, radius: 5)
+                        .position(x: ballPoint.x * sx, y: ballPoint.y * sy)
+                }
             }
         }
         .aspectRatio(courtW / courtH, contentMode: .fit)
