@@ -16,4 +16,10 @@ struct GameAttributes: ActivityAttributes {
     var homeShort: String
     var awayName: String
     var homeName: String
+    var awayRecord: String = ""
+    var homeRecord: String = ""
+    var venue: String = ""
+    var broadcast: String = ""
+    var odds: String = ""
+    var startDate: Date? = nil
 }

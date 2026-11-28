@@ -11,7 +11,7 @@ struct MatchDetailView: View {
 
     init(match: Match) {
         self.initialMatch = match
-        _tab = State(initialValue: match.state == .live ? 1 : 0)
+        _tab = State(initialValue: 0)
     }
     @State private var loading = true
 
@@ -22,7 +22,7 @@ struct MatchDetailView: View {
                 VStack(spacing: 16) {
                     header
                     Picker("", selection: $tab) {
-                        Text("Overview").tag(0); Text("Cast").tag(1); Text("Stats").tag(2); Text("Players").tag(3); Text("Plays").tag(4)
+                        Text("Overview").tag(0); Text("Stats").tag(1); Text("Players").tag(2); Text("Plays").tag(3)
                     }
                     .pickerStyle(.segmented).padding(.horizontal, 16)
 
@@ -30,9 +30,8 @@ struct MatchDetailView: View {
                     else {
                         switch tab {
                         case 0: overview
-                        case 1: GameCastView(match: match, detail: detail)
-                        case 2: stats
-                        case 3: players
+                        case 1: stats
+                        case 2: players
                         default: plays
                         }
                     }

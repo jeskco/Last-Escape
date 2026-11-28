@@ -28,7 +28,10 @@ final class LiveActivityManager: ObservableObject {
         guard existing(m.id) == nil else { return }
         let attributes = GameAttributes(matchId: m.id, sport: m.sport.rawValue,
                                         awayShort: m.away.short, homeShort: m.home.short,
-                                        awayName: m.away.name, homeName: m.home.name)
+                                        awayName: m.away.name, homeName: m.home.name,
+                                        awayRecord: m.away.record ?? "", homeRecord: m.home.record ?? "",
+                                        venue: m.venue ?? "", broadcast: m.broadcast ?? "",
+                                        odds: m.odds ?? "", startDate: m.start)
         do {
             _ = try Activity.request(attributes: attributes,
                                      content: .init(state: contentState(m), staleDate: nil), pushType: nil)

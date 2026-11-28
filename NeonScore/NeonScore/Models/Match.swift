@@ -220,42 +220,7 @@ struct PlayItem: Identifiable, Hashable {
     var scoring: Bool
 }
 
-struct ShotMark: Identifiable, Hashable {
-    var id = UUID()
-    var x: Double
-    var y: Double
-    var made: Bool
-    var teamId: String?
-    var text: String
-}
-
-struct RosterPlayer: Hashable {
-    var name: String
-    var jersey: String
-    var starter: Bool
-    var teamId: String
-}
-
-struct CastPlay: Identifiable, Hashable {
-    var id: Int
-    var period: Int
-    var clock: String
-    var text: String
-    var type: String
-    var teamId: String?
-    var shooting: Bool
-    var scoring: Bool
-    var points: Int
-    var x: Double?
-    var y: Double?
-    var away: Int
-    var home: Int
-}
-
 struct MatchDetail {
-    var roster: [RosterPlayer] = []
-    var cast: [CastPlay] = []
-    var shots: [ShotMark] = []
     var stats: [StatLine] = []
     var players: [PlayerTable] = []
     var plays: [PlayItem] = []
