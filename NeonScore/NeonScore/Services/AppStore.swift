@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import BackgroundTasks
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -11,7 +12,9 @@ final class AppStore: ObservableObject {
 
     @Published var favoriteTeams: Set<String> = [] { didSet { save() } }       // "sport:teamId"
     @Published var favoriteMatches: Set<String> = [] { didSet { save() } }     // "sport:matchId"
-    @Published var favoriteMatchSnapshots: [String: Match] = [:]
+    @Published var favoriteMatchSnapshots: [String: Match] = [:] { didSet { saveSnapshots() } }
+
+    static let shared = AppStore()
 
     private var timer: Timer?
     private let defaults = UserDefaults.standard
@@ -19,12 +22,33 @@ final class AppStore: ObservableObject {
     init() {
         favoriteTeams = Set(defaults.stringArray(forKey: "favTeams") ?? [])
         favoriteMatches = Set(defaults.stringArray(forKey: "favMatches") ?? [])
+        if let data = defaults.data(forKey: "favSnapshots"),
+           let decoded = try? JSONDecoder().decode([String: Match].self, from: data) {
+            favoriteMatchSnapshots = decoded
+        }
         Task { await load() }
         timer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, Calendar.current.isDateInToday(self.date) else { return }
+                guard let self else { return }
+                await self.pollFavorites()
+                guard Calendar.current.isDateInToday(self.date) else { return }
                 await self.load(silent: true)
             }
+        }
+    }
+
+    private func saveSnapshots() {
+        if let data = try? JSONEncoder().encode(favoriteMatchSnapshots) { defaults.set(data, forKey: "favSnapshots") }
+    }
+
+    /// Refreshes every starred game, updates its Live Activity and sends score notifications.
+    func pollFavorites() async {
+        for (key, old) in favoriteMatchSnapshots {
+            guard old.state != .finished || old.start.map({ Date().timeIntervalSince($0) < 6 * 3600 }) == true else { continue }
+            guard let fresh = try? await ESPNService.shared.refreshed(old) else { continue }
+            favoriteMatchSnapshots[key] = fresh
+            await LiveActivityManager.shared.update(fresh)
+            Notifier.notifyChange(old: old, new: fresh)
         }
     }
 
@@ -64,8 +88,15 @@ final class AppStore: ObservableObject {
     func isFavorite(_ m: Match) -> Bool { favoriteMatches.contains(key(m)) }
     func toggle(_ m: Match) {
         let k = key(m)
-        if favoriteMatches.contains(k) { favoriteMatches.remove(k); favoriteMatchSnapshots[k] = nil }
-        else { favoriteMatches.insert(k); favoriteMatchSnapshots[k] = m }
+        if favoriteMatches.contains(k) {
+            favoriteMatches.remove(k); favoriteMatchSnapshots[k] = nil
+            LiveActivityManager.shared.stop(m.id); Notifier.cancelStart(m)
+        } else {
+            favoriteMatches.insert(k); favoriteMatchSnapshots[k] = m
+            Notifier.requestAuthorization()
+            if m.state != .finished { LiveActivityManager.shared.start(m) }
+            Notifier.scheduleStart(m)
+        }
     }
     func isFavorite(_ t: TeamInfo) -> Bool { favoriteTeams.contains(t.id) }
     func toggle(_ t: TeamInfo) {

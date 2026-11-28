@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
-      - name: Build
+      - name: Build (with Live Activities)
         run: |
           set -o pipefail
           xcodegen generate --spec project.yml
@@ -29,16 +29,32 @@ jobs:
             build 2>&1 | tee build.log | tail -n 60
           APP=$(find build/Build/Products -maxdepth 2 -name "NeonScore.app" | head -n 1)
           mkdir -p out/Payload && cp -R "$APP" out/Payload/
-          (cd out && zip -qr ../NeonScore.ipa Payload)
+          (cd out && zip -qr ../NeonScore-build${{ github.run_number }}.ipa Payload)
+
+      - name: Build (without Live Activities)
+        run: |
+          set -o pipefail
+          rm -rf NeonScore.xcodeproj out
+          xcodegen generate --spec project-nola.yml
+          xcodebuild -project NeonScore.xcodeproj -scheme NeonScore -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-nola \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-nola.log | tail -n 60
+          APP=$(find build-nola/Build/Products -maxdepth 2 -name "NeonScore.app" | head -n 1)
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qr ../NeonScore-build${{ github.run_number }}-noLiveActivity.ipa Payload)
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: build-log
-          path: NeonScore/build.log
-      - name: Publish IPA as a release
+          path: NeonScore/build*.log
+
+      - name: Publish IPAs as a release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "neonscore-build-${{ github.run_number }}" --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" --title "NeonScore build ${{ github.run_number }}" \
-            --notes "Unsigned IPA. Sign with Signulous." NeonScore.ipa
+            --notes "Unsigned IPAs. Sign with Signulous. Use the noLiveActivity file if the main one won't install." \
+            NeonScore-build${{ github.run_number }}.ipa NeonScore-build${{ github.run_number }}-noLiveActivity.ipa

@@ -11,6 +11,21 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: NeonScore
+        excludes:
+          - Info.plist
+    info:
+      path: NeonScore/Info.plist
+      properties:
+        CFBundleDisplayName: NeonScore
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        LSApplicationCategoryType: public.app-category.sports
+        NSSupportsLiveActivities: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.jesk.neonscore.refresh]
+    dependencies:
+      - target: NeonScoreWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jesk.neonscore
@@ -21,12 +36,31 @@ targets:
         DEVELOPMENT_TEAM: ""
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGNING_REQUIRED: "NO"
-        GENERATE_INFOPLIST_FILE: "YES"
-        INFOPLIST_KEY_CFBundleDisplayName: NeonScore
-        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.sports
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  NeonScoreWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: NeonScoreWidgets
+      - path: NeonScore/Services/GameActivity.swift
+    info:
+      path: NeonScoreWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: NeonScore Live
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jesk.neonscore.widgets
+        PRODUCT_NAME: NeonScoreWidgets
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        SKIP_INSTALL: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"

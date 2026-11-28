@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: Favorites
 struct FavoritesView: View {
     @EnvironmentObject var store: AppStore
+    @ObservedObject private var live = LiveActivityManager.shared
     @State private var games: [Match] = []
     @State private var loading = false
 
@@ -21,6 +22,10 @@ struct FavoritesView: View {
                         } else if loading && games.isEmpty {
                             ProgressView().tint(Neon.cyan).padding(.top, 60)
                         } else {
+                            if !live.status.isEmpty {
+                                Label(live.status, systemImage: "rectangle.badge.person.crop")
+                                    .font(.footnote).foregroundStyle(Neon.textDim).frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             SectionTitle(text: "Today & starred")
                             ForEach(games) { m in
                                 NavigationLink(value: m) { MatchRow(match: m) }.buttonStyle(.plain)

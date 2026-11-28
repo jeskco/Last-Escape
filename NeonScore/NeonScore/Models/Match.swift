@@ -1,9 +1,9 @@
 import Foundation
 import SwiftUI
 
-enum MatchState: Int { case live = 0, upcoming = 1, finished = 2 }
+enum MatchState: Int, Codable { case live = 0, upcoming = 1, finished = 2 }
 
-struct Side: Hashable {
+struct Side: Hashable, Codable {
     var id: String
     var name: String
     var short: String
@@ -15,7 +15,7 @@ struct Side: Hashable {
     var colorHex: String?
 }
 
-struct Situation: Hashable {
+struct Situation: Hashable, Codable {
     var downDistance: String?      // "1st & 10 at KC 42"
     var yardLine: Int?
     var possessionId: String?
@@ -30,7 +30,7 @@ struct Situation: Hashable {
     var pitcher: String?
 }
 
-struct Match: Identifiable, Hashable {
+struct Match: Identifiable, Hashable, Codable {
     var id: String
     var sport: Sport
     var group: String          // league / tournament / round heading

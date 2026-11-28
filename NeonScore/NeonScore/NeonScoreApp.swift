@@ -1,10 +1,19 @@
 import SwiftUI
+import BackgroundTasks
 
 @main
 struct NeonScoreApp: App {
-    @StateObject private var store = AppStore()
+    @StateObject private var store = AppStore.shared
 
     init() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.jesk.neonscore.refresh", using: nil) { task in
+            Self.scheduleRefresh()
+            let work = Task { @MainActor in
+                await AppStore.shared.pollFavorites()
+                task.setTaskCompleted(success: true)
+            }
+            task.expirationHandler = { work.cancel() }
+        }
         let nav = UINavigationBarAppearance()
         nav.configureWithTransparentBackground()
         nav.titleTextAttributes = [.foregroundColor: UIColor.white]
@@ -18,12 +27,23 @@ struct NeonScoreApp: App {
         UITabBar.appearance().scrollEdgeAppearance = tab
     }
 
+    static func scheduleRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: "com.jesk.neonscore.refresh")
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 5 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    @Environment(\.scenePhase) private var phase
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
                 .tint(Neon.cyan)
+        }
+        .onChange(of: phase) { _, new in
+            if new == .background { Self.scheduleRefresh() }
         }
     }
 }
