@@ -1,0 +1,44 @@
+name: Build NeonScore IPA
+
+on:
+  push:
+    branches: [neonscore]
+    paths: ['NeonScore/**', '.github/workflows/neonscore-build.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: NeonScore
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodegen generate --spec project.yml
+          xcodebuild -project NeonScore.xcodeproj -scheme NeonScore -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | tail -n 60
+          APP=$(find build/Build/Products -maxdepth 2 -name "NeonScore.app" | head -n 1)
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qr ../NeonScore.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-log
+          path: NeonScore/build.log
+      - name: Publish IPA as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "neonscore-build-${{ github.run_number }}" --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" --title "NeonScore build ${{ github.run_number }}" \
+            --notes "Unsigned IPA. Sign with Signulous." NeonScore.ipa
